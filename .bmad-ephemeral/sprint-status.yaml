@@ -1,0 +1,98 @@
+# generated: 2025-11-12
+# project: CORTAP-RPT
+# project_key: CORTAP-RPT
+# tracking_system: file-system
+# story_location: /Users/bob.emerick/dev/AI-projects/CORTAP-RPT/docs/stories
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic exists in epic file but not contexted
+#   - contexted: Epic tech context created (required before drafting stories)
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - drafted: Story file created in stories folder
+#   - ready-for-dev: Draft approved and story context created
+#   - in-progress: Developer actively working on implementation
+#   - review: Under SM review (via code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - completed: Retrospective has been done
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epics should be 'contexted' before stories can be 'drafted'
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically drafts next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', SM reviews, then Dev moves to 'done'
+
+generated: 2025-11-12
+project: CORTAP-RPT
+project_key: CORTAP-RPT
+tracking_system: file-system
+story_location: /Users/bob.emerick/dev/AI-projects/CORTAP-RPT/docs/stories
+
+development_status:
+  # Epic 1: Foundation & Template Engine
+  epic-1: backlog
+  1-1-initialize-fastapi-project-structure: ready-for-dev
+  1-2-implement-structured-json-logging: backlog
+  1-3-implement-custom-exception-hierarchy: backlog
+  1-4-poc-validate-python-docxtpl-with-draft-audit-report-template: backlog
+  1-5-implement-documentgenerator-service-core: backlog
+  1-6-implement-grammar-helper-utilities: backlog
+  epic-1-retrospective: optional
+
+  # Epic 2: Conditional Logic Engine
+  epic-2: backlog
+  2-1-define-template-data-models-with-pydantic: backlog
+  2-2-implement-review-type-routing-cl-1: backlog
+  2-3-implement-deficiency-detection-and-alternative-content-cl-2: backlog
+  2-4-implement-conditional-section-inclusion-cl-3: backlog
+  2-5-implement-exit-conference-format-selection-cl-5: backlog
+  2-6-implement-deficiency-table-display-logic-cl-6: backlog
+  2-7-implement-dynamic-count-and-grammar-helpers-cl-8-cl-9: backlog
+  2-8-implement-conditionallogic-service-integration: backlog
+  epic-2-retrospective: optional
+
+  # Epic 3: Riskuity API Integration
+  epic-3: backlog
+  3-1-implement-riskuity-api-client-with-retry-logic: backlog
+  3-2-implement-data-transformer-service: backlog
+  3-3-implement-end-to-end-data-retrieval-flow: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: Validation Engine & User Feedback
+  epic-4: backlog
+  4-1-create-template-field-metadata-definitions: backlog
+  4-2-implement-validator-service: backlog
+  4-3-integrate-validation-into-document-generation-flow: backlog
+  epic-4-retrospective: optional
+
+  # Epic 5: AWS S3 Storage & Document Management
+  epic-5: backlog
+  5-1-implement-s3storage-service: backlog
+  5-2-integrate-s3-upload-into-document-generation-flow: backlog
+  epic-5-retrospective: optional
+
+  # Epic 6: REST API & React Integration
+  epic-6: backlog
+  6-1-implement-pydantic-request-and-response-models: backlog
+  6-2-implement-post-api-v1-generate-document-endpoint: backlog
+  6-3-implement-get-api-v1-templates-endpoint: backlog
+  6-4-implement-get-api-v1-validate-data-endpoint: backlog
+  6-5-configure-fastapi-app-with-cors-and-lambda-handler: backlog
+  epic-6-retrospective: optional
+
+  # Epic 7: Testing & AWS Deployment
+  epic-7: backlog
+  7-1-implement-unit-tests-for-all-services: backlog
+  7-2-implement-integration-tests: backlog
+  7-3-implement-end-to-end-api-tests: backlog
+  7-4-create-aws-sam-infrastructure-template: backlog
+  7-5-create-lambda-deployment-package: backlog
+  7-6-deploy-to-aws-and-validate: backlog
+  epic-7-retrospective: optional

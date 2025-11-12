@@ -1,0 +1,174 @@
+<story-context id=".bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>1</epicId>
+    <storyId>1</storyId>
+    <title>Initialize FastAPI Project Structure</title>
+    <status>Approved</status>
+    <generatedAt>2025-11-12</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>.bmad-ephemeral/stories/1-1-initialize-fastapi-project-structure.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>a developer</asA>
+    <iWant>to set up the FastAPI project with the recommended starter template</iWant>
+    <soThat>we have a production-ready foundation with proper structure and tooling</soThat>
+    <tasks>
+      - Install FastAPI template CLI and create project (AC: #1)
+      - Install additional dependencies (AC: #3)
+      - Remove unused scaffolding (AC: #2)
+      - Implement configuration module (AC: #4)
+      - Initialize Git repository (AC: #1)
+      - Verify project setup (AC: #5)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    AC-1: Project structure matches architecture.md specification
+      - FastAPI app with async support configured
+      - Pydantic models structure created
+      - Environment-based configuration (.env support) implemented
+      - pytest test structure initialized
+      - Docker setup included
+      - Git repository initialized with .gitignore
+
+    AC-2: Unused scaffolding is removed
+      - Remove JWT auth if not needed for MVP
+      - Remove SQLAlchemy database models (keep ORM for v2 job queue metadata only)
+      - Keep core FastAPI structure
+
+    AC-3: Additional dependencies are installed
+      - python-docxtpl 0.20.1
+      - boto3 1.40.x
+      - httpx (latest)
+      - mangum 0.19.0 (Lambda adapter)
+
+    AC-4: Configuration module implemented
+      - app/config.py using Pydantic Settings with fields: riskuity_api_key, riskuity_base_url, s3_bucket_name, aws_region, log_level
+      - .env.example template created
+
+    AC-5: Module structure pattern followed
+      - Import ordering: Standard lib → Third-party → Local (alphabetical within each group)
+      - All modules follow architecture.md Module Structure Pattern (lines 197-228)
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>CORTAP-RPT Architecture</title>
+        <section>Project Initialization</section>
+        <snippet>Install fastapi-template-cli and create project with: fastapi-template new cortap-rpt --orm sqlalchemy --type api. Install additional dependencies: python-docxtpl, boto3, pydantic-settings.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>CORTAP-RPT Architecture</title>
+        <section>Project Structure</section>
+        <snippet>Complete directory layout with app/, tests/, lambda/, infra/ directories. Includes services, models, api routes, templates, and utils subdirectories.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>CORTAP-RPT Architecture</title>
+        <section>Module Structure Pattern</section>
+        <snippet>Import ordering: Standard library → Third-party → Local (alphabetical). Docstrings for all modules, classes, functions. Type hints required.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>CORTAP-RPT Architecture</title>
+        <section>Decision Summary</section>
+        <snippet>Python 3.11.14, FastAPI 0.121.1, python-docxtpl 0.20.1, Pydantic 2.x, Lambda + Mangum 0.19.0, boto3 1.40.x, httpx, pytest 9.0.0</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics.md</path>
+        <title>CORTAP-RPT Epics</title>
+        <section>Epic 1: Foundation & Template Engine</section>
+        <snippet>Story 1.1 establishes FastAPI project foundation with proper structure, tooling, and dependencies. First story with no prerequisites.</snippet>
+      </doc>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>CORTAP-RPT Product Requirements</title>
+        <section>Epic 1</section>
+        <snippet>Foundation epic creates technical foundation for all subsequent development and proves Word formatting preservation capability.</snippet>
+      </doc>
+    </docs>
+
+    <code>
+      <!-- No existing code - this is the first story initializing the project -->
+    </code>
+
+    <dependencies>
+      <python>
+        <package name="fastapi" version="0.121.1" />
+        <package name="python-docxtpl" version="0.20.1" />
+        <package name="boto3" version="1.40.x" />
+        <package name="httpx" version="latest" />
+        <package name="mangum" version="0.19.0" />
+        <package name="pydantic" version="2.x" />
+        <package name="pydantic-settings" version="latest" />
+        <package name="pytest" version="9.0.0" />
+        <package name="pytest-asyncio" version="latest" />
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    - Python version MUST be 3.11.14 (AWS Lambda runtime)
+    - Use fastapi-template-cli with --orm sqlalchemy --type api flags
+    - Remove JWT authentication scaffolding (not needed for MVP)
+    - Remove SQLAlchemy database models but keep ORM infrastructure for v2
+    - Configuration fields: riskuity_api_key, riskuity_base_url, s3_bucket_name, aws_region, log_level
+    - All environment variables must have .env.example template
+    - Import ordering pattern is MANDATORY: Standard lib → Third-party → Local (alphabetical)
+    - Git repository must be initialized with .gitignore including .env
+    - Project structure must exactly match architecture.md lines 73-157
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>app/config.py Settings</name>
+      <kind>Pydantic Settings class</kind>
+      <signature>class Settings(BaseSettings): riskuity_api_key: str; riskuity_base_url: str = "https://api.riskuity.com/v1"; s3_bucket_name: str; aws_region: str = "us-east-1"; log_level: str = "INFO"</signature>
+      <path>app/config.py</path>
+    </interface>
+    <interface>
+      <name>FastAPI Application</name>
+      <kind>FastAPI app instance</kind>
+      <signature>app = FastAPI(title="CORTAP-RPT", version="1.0.0")</signature>
+      <path>app/main.py</path>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Use pytest for all testing. Follow Test Organization from architecture.md: tests/unit/ for isolated function/class tests with mocked I/O, tests/integration/ for service integrations with mocked external dependencies, tests/e2e/ for full API endpoint tests with TestClient. Use pytest-asyncio for async tests. Fixtures in conftest.py for shared test data and mocks.
+    </standards>
+
+    <locations>
+      - tests/unit/
+      - tests/integration/
+      - tests/e2e/
+      - tests/conftest.py
+    </locations>
+
+    <ideas>
+      <idea ac="AC-1">
+        - Verify project directory structure matches architecture.md specification
+        - Test that FastAPI app can be imported without errors
+        - Verify pytest test discovery works with pytest --collect-only
+      </idea>
+      <idea ac="AC-3">
+        - Verify all required dependencies are in requirements.txt with correct versions
+        - Test that imports work for python-docxtpl, boto3, httpx, mangum
+      </idea>
+      <idea ac="AC-4">
+        - Test that config.py Settings class loads from .env file
+        - Verify required fields are present: riskuity_api_key, riskuity_base_url, s3_bucket_name, aws_region, log_level
+        - Test default values for optional fields
+      </idea>
+      <idea ac="AC-5">
+        - Review generated modules and verify import ordering pattern
+        - Ensure all modules have proper docstrings
+      </idea>
+    </ideas>
+  </tests>
+</story-context>
