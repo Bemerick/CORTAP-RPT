@@ -38,7 +38,7 @@ story_location: /Users/bob.emerick/dev/AI-projects/CORTAP-RPT/docs/stories
 development_status:
   # Epic 1: Foundation & Template Engine
   epic-1: backlog
-  1-1-initialize-fastapi-project-structure: ready-for-dev
+  1-1-initialize-fastapi-project-structure: review
   1-2-implement-structured-json-logging: backlog
   1-3-implement-custom-exception-hierarchy: backlog
   1-4-poc-validate-python-docxtpl-with-draft-audit-report-template: backlog
