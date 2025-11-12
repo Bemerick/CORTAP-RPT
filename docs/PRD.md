@@ -20,6 +20,10 @@ CORTAP-RPT is a document generation system that automates the creation of FTA (F
 
 **Auditor Liberation:** This system removes the burden of document creation and formatting from auditors, allowing them to focus entirely on their expertise—conducting thorough, high-quality compliance audits. The magic moment is when an auditor clicks "Generate Document" and receives a perfectly formatted, professionally polished report ready for review, without touching Word.
 
+### ⚠️ Critical Integration Dependency
+
+**CORTAP-RPT relies heavily on data from Riskuity.** Several required fields (review type, exit conference format, ERF tracking) may not currently exist in Riskuity and will need to be added. **See "Riskuity Integration Requirements" section** for complete field inventory, required changes, and critical questions that must be answered before Epic 2 development begins.
+
 ---
 
 ## Project Classification
@@ -362,6 +366,8 @@ GET https://api.riskuity.com/v1/projects/{project_id}/risks
 
 This is the heart of CORTAP-RPT's intelligence. The system must implement 9 distinct conditional logic patterns.
 
+**⚠️ Riskuity Dependency:** Each conditional logic pattern requires specific fields from Riskuity API. See "Riskuity Integration Requirements → Conditional Logic → Riskuity Field Dependencies" for complete field mapping and blocker analysis.
+
 **FR-2.1: Review Type Routing**
 - System SHALL accept `review_type` parameter with values: "Triennial Review" | "State Management Review" | "Combined Triennial and State Management Review"
 - System SHALL select appropriate content based on review type throughout document
@@ -680,6 +686,339 @@ Requirements will be decomposed into epics and bite-sized stories optimized for 
 
 ---
 
+## Riskuity Integration Requirements
+
+### Critical Integration Dependency
+
+**CORTAP-RPT cannot function without accurate, complete data from Riskuity.** This section defines the explicit data contract between systems, identifies required Riskuity changes, and documents dependencies that could block CORTAP-RPT development.
+
+**Key Finding:** Several conditional logic patterns depend on fields that may not currently exist in Riskuity. These must be verified and added before CORTAP-RPT can implement full functionality.
+
+---
+
+### Riskuity API Data Contract
+
+CORTAP-RPT consumes four Riskuity API endpoints. The following tables specify required fields, their purpose, and current verification status.
+
+#### Endpoint 1: Project Metadata
+
+**`GET /v1/projects/{project_id}`**
+
+Provides project configuration, recipient information, and review parameters.
+
+| Field Name | Data Type | Required? | Used For | Verification Status |
+|------------|-----------|-----------|----------|---------------------|
+| `recipient_name` | string | ✅ Critical | Template merge field | ❓ Unknown |
+| `recipient_acronym` | string | ✅ Critical | Template merge field | ❓ Unknown |
+| `region_number` | integer (1-10) | ✅ Critical | Template merge field | ❓ Unknown |
+| **`review_type`** | enum | ✅ Critical | **CL-1: Review Type Routing** | ❓ Unknown - LIKELY MISSING |
+| **`exit_conference_format`** | enum | ✅ Required | **CL-5: Exit Format Selection** | ❓ Unknown - LIKELY MISSING |
+| `site_visit_start_date` | date (ISO 8601) | ✅ Required | Template merge field | ❓ Unknown |
+| `site_visit_end_date` | date (ISO 8601) | ✅ Required | Template merge field | ❓ Unknown |
+| `report_date` | date (ISO 8601) | ✅ Required | Template merge field | ❓ Unknown |
+| `recipient_contact_name` | string | ⚠️ Optional | Template merge field | ❓ Unknown |
+| `recipient_phone` | string | ⚠️ Optional | Template merge field | ❓ Unknown |
+| `recipient_email` | email | ⚠️ Optional | Template merge field | ❓ Unknown |
+| **`reviewed_subrecipients`** | boolean | ⚠️ Optional | **CL-4: Conditional Paragraphs** | ❓ Unknown - LIKELY MISSING |
+| `subrecipient_name` | string | ⚠️ Optional | Template merge field, CL-4 | ❓ Unknown |
+| `contractor_name` | string | ⚠️ Optional | Template merge field | ❓ Unknown |
+| `contractor_firm` | string | ⚠️ Optional | Template merge field | ❓ Unknown |
+| `audit_team` | array | ✅ Required | Team member list | ❓ Unknown |
+
+**Critical Field Requirements:**
+
+**`review_type`** - MUST be one of these EXACT values (case-sensitive):
+- `"Triennial Review"`
+- `"State Management Review"`
+- `"Combined Triennial and State Management Review"`
+
+**`exit_conference_format`** - MUST be one of:
+- `"virtual"`
+- `"in-person"`
+
+**`reviewed_subrecipients`** - Boolean flag OR derived from `subrecipient_name != null`
+
+---
+
+#### Endpoint 2: Assessment Findings
+
+**`GET /v1/projects/{project_id}/assessments`**
+
+Returns findings for all 23 CORTAP review areas. This is the MOST CRITICAL endpoint for conditional logic.
+
+| Field Name | Data Type | Required? | Used For | Verification Status |
+|------------|-----------|-----------|----------|---------------------|
+| `assessments` | array (23 items) | ✅ Critical | All deficiency logic | ❓ Unknown |
+| `assessments[].review_area` | string | ✅ Critical | CL-7: Dynamic Lists | ❓ Unknown |
+| **`assessments[].finding`** | enum | ✅ Critical | **CL-2, CL-6: Deficiency Logic** | ❓ Unknown - VERIFY VALUES |
+| `assessments[].deficiency_code` | string | ⚠️ Conditional | CL-6: Deficiency Table | ❓ Unknown |
+| `assessments[].description` | text | ⚠️ Conditional | CL-6: Deficiency Table | ❓ Unknown |
+| `assessments[].corrective_action` | text | ⚠️ Conditional | CL-6: Deficiency Table | ❓ Unknown |
+| `assessments[].due_date` | date | ⚠️ Conditional | CL-6: Deficiency Table | ❓ Unknown |
+| `assessments[].date_closed` | date | ⚠️ Conditional | CL-6: Deficiency Table | ❓ Unknown |
+
+**Critical Field Requirements:**
+
+**`assessments[].finding`** - MUST be one of these EXACT values:
+- `"D"` (Deficient)
+- `"ND"` (Non-Deficient)
+- `"NA"` (Not Applicable)
+
+**Note:** Deficiency detail fields (code, description, corrective_action, due_date, date_closed) are ONLY required when `finding = "D"`.
+
+**Derived Fields** (calculated by CORTAP-RPT from assessments data):
+- `has_deficiencies` = any(assessment.finding == "D")
+- `deficiency_count` = count(assessment.finding == "D")
+- `deficiency_areas` = list of review_area names where finding == "D"
+
+---
+
+#### Endpoint 3: Enhanced Review Focus (ERF)
+
+**`GET /v1/projects/{project_id}/risks`** OR **`GET /v1/projects/{project_id}/erf`**
+
+Enhanced Review Focus areas requiring deep-dive investigation.
+
+| Field Name | Data Type | Required? | Used For | Verification Status |
+|------------|-----------|-----------|----------|---------------------|
+| **`erf_items`** | array | ⚠️ Optional | **CL-3, CL-8: ERF Section** | ❓ Unknown - MAY NOT EXIST |
+| `erf_items[].area` | string | ⚠️ Optional | CL-3, CL-7: Lists | ❓ Unknown |
+| `erf_items[].description` | text | ⚠️ Optional | CL-3: ERF details | ❓ Unknown |
+
+**Derived Fields:**
+- `erf_count` = count(erf_items)
+- `erf_areas` = list of erf_items[].area
+- `show_erf_section` = erf_count > 0
+
+**Critical Question:** Does Riskuity currently track ERF data? If not, should it be added or managed externally?
+
+---
+
+#### Endpoint 4: Surveys (Low Priority for MVP)
+
+**`GET /v1/projects/{project_id}/surveys`**
+
+Survey response data. Usage TBD based on template requirements.
+
+| Field Name | Data Type | Required? | Used For | Verification Status |
+|------------|-----------|-----------|----------|---------------------|
+| `surveys` | array | ⚠️ Optional | Future templates | ❓ Unknown |
+
+**Status:** Low priority for MVP. May be used for future template enhancements.
+
+---
+
+### Required Riskuity Changes
+
+The following changes are **likely required** in Riskuity before CORTAP-RPT can function fully:
+
+#### 1. New Fields in Project Profile
+
+**Fields to Add:**
+
+| Field | UI Component | Location | Default Value | Priority |
+|-------|-------------|----------|---------------|----------|
+| `review_type` | Dropdown (3 options) | Project Configuration | (none - must select) | 🔴 CRITICAL |
+| `exit_conference_format` | Radio buttons (2 options) | Project Configuration | "virtual" | 🟠 HIGH |
+| `reviewed_subrecipients` | Checkbox | Project Configuration | false | 🟡 MEDIUM |
+
+**Proposed UI Layout:**
+
+```
+┌─────────────────────────────────────────────────┐
+│ CORTAP Review Configuration                     │
+├─────────────────────────────────────────────────┤
+│                                                  │
+│ Review Type: * [Required Dropdown]              │
+│   • Triennial Review                            │
+│   • State Management Review                     │
+│   • Combined Triennial and State Management     │
+│                                                  │
+│ Exit Conference Format: * [Required]            │
+│   ○ Virtual     ○ In-Person                     │
+│                                                  │
+│ ☐ Subrecipients Reviewed                        │
+│   If checked:                                   │
+│   Subrecipient Name: [Text field]               │
+│                                                  │
+└─────────────────────────────────────────────────┘
+```
+
+#### 2. Enhanced Review Focus (ERF) Tracking
+
+**If ERF is NOT currently tracked in Riskuity:**
+
+Add ERF tracking capability:
+- New table/module for ERF items
+- Link ERF items to review areas
+- Capture ERF rationale/description
+- Expose via API endpoint
+
+**Alternative:** Track ERF externally if Riskuity roadmap doesn't support this.
+
+#### 3. Assessment Data Completeness
+
+**Ensure:**
+- All 23 review areas are present in assessments endpoint
+- When `finding = "D"`, deficiency details are captured in Riskuity UI
+- Riskuity enforces required fields for deficiencies
+
+---
+
+### Conditional Logic → Riskuity Field Dependencies
+
+This table maps each conditional logic pattern to required Riskuity fields.
+
+| CL-ID | Pattern | Riskuity Field(s) Required | Blocker Level | Impact if Missing |
+|-------|---------|---------------------------|---------------|-------------------|
+| **CL-1** | Review Type Routing | `review_type` | 🔴 CRITICAL | ALL type-specific content incorrect |
+| **CL-2** | Deficiency Detection | `assessments[].finding` | 🔴 CRITICAL | Core deficiency logic broken |
+| **CL-3** | Conditional Sections | `erf_items`, `reviewed_subrecipients` | 🟡 MEDIUM | ERF/subrecipient sections missing |
+| **CL-4** | Conditional Paragraphs | `reviewed_subrecipients` | 🟡 MEDIUM | Subrecipient paragraphs missing |
+| **CL-5** | Exit Format Selection | `exit_conference_format` | 🟡 MEDIUM | One paragraph affected |
+| **CL-6** | Deficiency Table | All `assessments[]` fields | 🔴 CRITICAL | Entire 23-row table broken |
+| **CL-7** | Dynamic Lists | `assessments[].review_area`, `erf_items[].area` | 🟠 HIGH | List formatting affected |
+| **CL-8** | Dynamic Counts | Derived from other fields | 🟡 MEDIUM | Count display affected |
+| **CL-9** | Grammar Helpers | Uses counts from other fields | ❌ None | Pure logic, no dependency |
+
+**Blocker Summary:**
+- 🔴 **3 CRITICAL blockers** - Without these, major functionality is broken
+- 🟠 **1 HIGH blocker** - Affects important features
+- 🟡 **4 MEDIUM blockers** - Specific sections/features only
+- ❌ **1 No dependency** - Pure logic
+
+---
+
+### Implementation Phase Dependencies
+
+**Phase 1: Foundation (Epic 1) - Weeks 1-3**
+- ✅ **NO Riskuity dependencies** - Can proceed immediately
+- Stories 1.1-1.6 can be completed with mock data
+
+**Phase 2: Conditional Logic (Epic 2) - Weeks 4-5**
+- 🔴 **BLOCKED** without Riskuity field verification
+- 6 out of 8 stories depend on Riskuity fields
+- **Can use mock data** if real API not ready, but must match exact schema
+
+**Phase 3: Riskuity Integration (Epic 3) - Week 6**
+- 🔴 **FULLY BLOCKED** without API access and confirmed field schema
+- All 3 stories require working Riskuity API
+
+**Risk:** If Riskuity changes are delayed, Epic 2 and Epic 3 timelines slip.
+
+---
+
+### Critical Questions for Riskuity Team
+
+**These questions MUST be answered before Epic 2 implementation begins:**
+
+#### CRITICAL Priority (Answer First)
+
+1. **Review Type Field:**
+   - Does Riskuity currently capture "Review Type" (Triennial/State Management/Combined)?
+   - If yes, what is the exact field name and possible values?
+   - If no, can this be added as a dropdown in the project profile? Timeline?
+
+2. **Assessment Findings:**
+   - What are the EXACT values stored for assessment findings? ("D"/"ND"/"NA" or different?)
+   - Are all 23 CORTAP review areas guaranteed to be present in the assessments endpoint?
+   - If finding = "D", are deficiency details (code, description, corrective_action) required fields in Riskuity UI?
+
+3. **Exit Conference Format:**
+   - Does Riskuity capture whether the exit conference was virtual or in-person?
+   - If no, can this be added as a radio button (virtual/in-person)? Where in the UI?
+
+#### HIGH Priority
+
+4. **Enhanced Review Focus (ERF):**
+   - Does Riskuity have a concept of "Enhanced Review Focus" areas?
+   - If yes, how is ERF data stored and accessed via API?
+   - If no, should ERF be tracked in Riskuity or handled externally?
+
+5. **Subrecipient Review:**
+   - How does Riskuity indicate that subrecipients were reviewed?
+   - Is there a `reviewed_subrecipients` boolean flag?
+   - Or should CORTAP-RPT infer this from `subrecipient_name != null`?
+
+6. **API Response Schema:**
+   - Can you provide sample JSON responses for all 4 endpoints?
+   - Are there API documentation (Swagger/OpenAPI) specs available?
+
+#### MEDIUM Priority
+
+7. **Audit Team Personnel:**
+   - Where is audit team information stored? (project endpoint or separate?)
+   - Can multiple team members be assigned to a project?
+
+8. **Date Fields:**
+   - What date format does Riskuity use in API responses (ISO 8601, Unix timestamp)?
+   - Are dates stored in UTC or local timezone?
+
+9. **Field Validation:**
+   - Are required fields enforced in Riskuity UI?
+   - What happens if optional fields are missing (null, empty string, omitted)?
+
+10. **Data Completeness:**
+    - At what point in the workflow is data "complete" for report generation?
+    - Should CORTAP-RPT validate data completeness or assume Riskuity enforces it?
+
+#### Integration Logistics
+
+11. **API Access:**
+    - What is the process for obtaining API credentials for dev/test?
+    - Is there a sandbox/test environment available?
+    - What are the rate limits?
+
+12. **Change Management:**
+    - If new fields need to be added to Riskuity, what is the typical timeline?
+    - Would schema changes require API versioning (v2)?
+    - Can we coordinate joint testing once Riskuity changes are deployed?
+
+---
+
+### Risk Mitigation Strategies
+
+**If Riskuity changes are delayed:**
+
+| Scenario | Mitigation | Trade-off |
+|----------|-----------|-----------|
+| `review_type` missing | Hard-code to "Triennial Review" for testing | No multi-type support, blocks CL-1 |
+| `exit_conference_format` missing | Default to "virtual" | Wrong paragraph in some cases |
+| `erf_items` missing | Omit ERF section entirely | Missing functionality |
+| Assessment fields incomplete | Use mock/test data that matches documented schema | Cannot test with real Riskuity |
+| API access delayed | Build with mock API responses | Integration testing blocked |
+
+**Recommended Development Approach:**
+1. **Week 1-2:** Build Epic 1 (Foundation) with mock data
+2. **Week 3:** Receive Riskuity field confirmation, update mock data
+3. **Week 4-5:** Build Epic 2 (Conditional Logic) with validated mock data
+4. **Week 6+:** Integrate with real Riskuity API
+
+**Critical Path:** Riskuity field verification must complete by end of Week 2 to avoid Epic 2 delays.
+
+---
+
+### Open Issues & Assumptions
+
+**Current Assumptions (TO BE VALIDATED):**
+
+| Assumption | Risk Level | Validation Method |
+|-----------|------------|-------------------|
+| Riskuity API uses JSON REST format | LOW | Verify with API docs |
+| All 4 endpoints exist and are accessible | MEDIUM | Test API access |
+| `review_type` field does NOT currently exist | HIGH | ⚠️ **Confirm with Riskuity team** |
+| Assessment findings use "D"/"ND"/"NA" values | HIGH | ⚠️ **Check actual database values** |
+| ERF data is NOT currently tracked | MEDIUM | ⚠️ **Confirm current ERF workflow** |
+| Dates are in ISO 8601 format | LOW | Verify API response samples |
+
+**Unresolved Questions:**
+1. Who is responsible for data quality validation? (Riskuity enforces vs CORTAP-RPT validates)
+2. What should CORTAP-RPT do if required fields are missing from Riskuity API?
+3. How will API schema changes be communicated and versioned?
+4. What are Riskuity API performance characteristics (latency, rate limits)?
+
+---
+
 ## Appendix: Conditional Logic Rule Reference
 
 **Complete Business Rules for Template Processing:**
@@ -723,10 +1062,17 @@ Requirements will be decomposed into epics and bite-sized stories optimized for 
 
 ## Next Steps
 
-**Immediate Actions:**
-1. ✅ **Request Riskuity API Access** - Obtain credentials and documentation
-2. ⏭️ **Epic & Story Breakdown** - Run: `workflow create-epics-and-stories`
-3. ⏭️ **Architecture Design** - Run: `workflow create-architecture` (recommended before coding)
+**CRITICAL - Immediate Actions (This Week):**
+1. 🔴 **Send Questions to Riskuity Team** - Review "Critical Questions for Riskuity Team" section above and obtain answers before Epic 2 begins
+2. 🔴 **Request Riskuity API Access** - Obtain credentials, documentation, and sample API responses
+3. 🔴 **Schedule Riskuity Integration Meeting** - Discuss required field additions, timeline, and change management process
+
+**Short-Term Actions (Weeks 1-2):**
+4. ✅ **Epic & Story Breakdown** - Run: `workflow create-epics-and-stories`
+5. ✅ **Architecture Design** - Run: `workflow create-architecture` (recommended before coding)
+6. ⏭️ **Create Mock Riskuity API Responses** - Based on documented field requirements until real API available
+
+**WARNING:** Epic 2 (Conditional Logic) and Epic 3 (Riskuity Integration) are BLOCKED until Riskuity field verification is complete. See "Riskuity Integration Requirements" section for details.
 4. ⏭️ **Development** - Start Week 1 POC with template library validation
 
 **Workflow Sequence:**
