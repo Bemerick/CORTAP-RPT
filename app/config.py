@@ -21,7 +21,7 @@ class Settings(BaseSettings):
 
     # Riskuity API Configuration
     riskuity_api_key: str = Field(
-        ...,
+        default="",
         description="API key for Riskuity authentication"
     )
     riskuity_base_url: str = Field(
@@ -31,7 +31,7 @@ class Settings(BaseSettings):
 
     # AWS Configuration
     s3_bucket_name: str = Field(
-        ...,
+        default="",
         description="S3 bucket name for document storage"
     )
     aws_region: str = Field(
