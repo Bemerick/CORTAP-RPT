@@ -46,7 +46,28 @@ development_status:
   1-6-implement-grammar-helper-utilities: backlog
   epic-1-retrospective: optional
 
-  # Epic 2: Conditional Logic Engine
+  # Epic 3.5: Project Data Service (NEW - Data Service Pattern)
+  epic-3-5: backlog
+  3-5-1-design-canonical-json-schema-for-project-data: backlog
+  3-5-2-implement-riskuity-api-client-with-retry-logic: backlog
+  3-5-3-implement-data-transformer-riskuity-to-json: backlog
+  3-5-4-implement-s3-storage-for-json-data-files: backlog
+  3-5-5-implement-caching-and-ttl-logic: backlog
+  3-5-6-implement-data-validation-and-completeness-checks: backlog
+  3-5-7-implement-post-api-v1-projects-project-id-data-endpoint: backlog
+  epic-3-5-retrospective: optional
+
+  # Epic 4: Recipient Information Request Template (NEW - RIR)
+  epic-4: backlog
+  4-1-convert-rir-template-to-docxtpl-format: backlog
+  4-2-implement-review-type-conditional-logic-cl-rir-1: backlog
+  4-3-create-rir-data-model-and-context-builder: backlog
+  4-4-integrate-rir-with-data-service-json-to-template: backlog
+  4-5-add-rir-to-document-generation-api: backlog
+  4-6-end-to-end-testing-with-real-riskuity-data-structure: backlog
+  epic-4-retrospective: optional
+
+  # Epic 2: Conditional Logic Engine (DEFERRED - moved after Epic 4)
   epic-2: backlog
   2-1-define-template-data-models-with-pydantic: backlog
   2-2-implement-review-type-routing-cl-1: backlog
@@ -58,41 +79,34 @@ development_status:
   2-8-implement-conditionallogic-service-integration: backlog
   epic-2-retrospective: optional
 
-  # Epic 3: Riskuity API Integration
-  epic-3: backlog
-  3-1-implement-riskuity-api-client-with-retry-logic: backlog
-  3-2-implement-data-transformer-service: backlog
-  3-3-implement-end-to-end-data-retrieval-flow: backlog
-  epic-3-retrospective: optional
-
-  # Epic 4: Validation Engine & User Feedback
-  epic-4: backlog
-  4-1-create-template-field-metadata-definitions: backlog
-  4-2-implement-validator-service: backlog
-  4-3-integrate-validation-into-document-generation-flow: backlog
-  epic-4-retrospective: optional
-
-  # Epic 5: AWS S3 Storage & Document Management
+  # Epic 5: Validation Engine (renumbered from Epic 4)
   epic-5: backlog
-  5-1-implement-s3storage-service: backlog
-  5-2-integrate-s3-upload-into-document-generation-flow: backlog
+  5-1-create-template-field-metadata-definitions: backlog
+  5-2-implement-validator-service: backlog
+  5-3-integrate-validation-into-document-generation-flow: backlog
   epic-5-retrospective: optional
 
-  # Epic 6: REST API & React Integration
+  # Epic 6: AWS S3 Storage (renumbered from Epic 5)
   epic-6: backlog
-  6-1-implement-pydantic-request-and-response-models: backlog
-  6-2-implement-post-api-v1-generate-document-endpoint: backlog
-  6-3-implement-get-api-v1-templates-endpoint: backlog
-  6-4-implement-get-api-v1-validate-data-endpoint: backlog
-  6-5-configure-fastapi-app-with-cors-and-lambda-handler: backlog
+  6-1-implement-s3storage-service: backlog
+  6-2-integrate-s3-upload-into-document-generation-flow: backlog
   epic-6-retrospective: optional
 
-  # Epic 7: Testing & AWS Deployment
+  # Epic 7: REST API & React Integration (renumbered from Epic 6)
   epic-7: backlog
-  7-1-implement-unit-tests-for-all-services: backlog
-  7-2-implement-integration-tests: backlog
-  7-3-implement-end-to-end-api-tests: backlog
-  7-4-create-aws-sam-infrastructure-template: backlog
-  7-5-create-lambda-deployment-package: backlog
-  7-6-deploy-to-aws-and-validate: backlog
+  7-1-implement-pydantic-request-and-response-models: backlog
+  7-2-implement-post-api-v1-generate-document-endpoint: backlog
+  7-3-implement-get-api-v1-templates-endpoint: backlog
+  7-4-implement-get-api-v1-validate-data-endpoint: backlog
+  7-5-configure-fastapi-app-with-cors-and-lambda-handler: backlog
   epic-7-retrospective: optional
+
+  # Epic 8: Testing & AWS Deployment (renumbered from Epic 7)
+  epic-8: backlog
+  8-1-implement-unit-tests-for-all-services: backlog
+  8-2-implement-integration-tests: backlog
+  8-3-implement-end-to-end-api-tests: backlog
+  8-4-create-aws-sam-infrastructure-template: backlog
+  8-5-create-lambda-deployment-package: backlog
+  8-6-deploy-to-aws-and-validate: backlog
+  epic-8-retrospective: optional
