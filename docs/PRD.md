@@ -669,46 +669,67 @@ CORTAP-RPT will use a **data service layer** that fetches Riskuity data once, tr
 
 **Revised Epic Structure:**
 
-1. **Epic 1: Foundation & Template Engine** (3 weeks) - ✅ IN PROGRESS
+**✅ DETAILED BREAKDOWN COMPLETE** - See `docs/epics.md` for full story definitions
+
+**Total: 9 Epics, 43 Stories, ~7-8 weeks**
+
+1. **Epic 1: Foundation & Template Engine** (1-2 weeks) - 6 stories - ✅ IN PROGRESS
    - Stories: 1.1 (complete), 1.2-1.6 (pending)
+   - Establishes FastAPI, logging, exceptions, POC validation, DocumentGenerator, grammar helpers
    - No Riskuity dependencies - can proceed immediately
 
-2. **Epic 3.5: Project Data Service** (1 week) - 🆕 NEW
-   - Riskuity API client for 4 endpoints
-   - Data transformer (Riskuity → JSON)
-   - S3 storage with caching/TTL
-   - Data validation engine
-   - `/projects/{id}/data` API endpoint
-   - **Dependency:** Riskuity API access required
+2. **Epic 3.5: Project Data Service** (1 week) - 7 stories - 🆕 NEW
+   - 3.5.1: Design canonical JSON schema
+   - 3.5.2: Riskuity API client with retry logic (4 endpoints)
+   - 3.5.3: Data transformer (Riskuity → JSON)
+   - 3.5.4: S3 storage for JSON data files
+   - 3.5.5: Caching and TTL logic (1-hour cache)
+   - 3.5.6: Data validation and completeness checks
+   - 3.5.7: POST `/api/v1/projects/{id}/data` endpoint
+   - **Dependency:** Epic 1 complete; Riskuity API access (can use mocks initially)
 
-3. **Epic 4: Recipient Information Request Template** (1 week) - 🆕 NEW
-   - Simple template (15 fields, 1 conditional pattern)
-   - Validates data service pattern end-to-end
-   - Quick win for stakeholders
+3. **Epic 4: Recipient Information Request Template** (1 week) - 6 stories - 🆕 NEW
+   - 4.1: Convert RIR template to docxtpl format (15 fields)
+   - 4.2: Implement review type conditional logic (CL-RIR-1)
+   - 4.3: Create RIRTemplateData model and context builder
+   - 4.4: Integrate RIR with data service (JSON → template)
+   - 4.5: Add RIR to document generation API
+   - 4.6: End-to-end testing with realistic data
    - **Dependency:** Epic 3.5 complete
+   - **Strategic Value:** Validates data service architecture with simple template
 
-4. **Epic 2: Conditional Logic Engine** (2 weeks) - DEFERRED
+4. **Epic 2: Conditional Logic Engine** (1.5 weeks) - 8 stories - 🔄 DEFERRED
    - All 9 complex patterns for Draft Audit Report
-   - **Dependency:** Epic 3.5 complete, Riskuity fields verified
+   - Benefits from architectural lessons learned in Epic 4
+   - **Dependency:** Epic 3.5 complete, Epic 4 recommended, Riskuity fields verified
 
-5. **Epic 5: Additional Templates** (2-3 weeks)
-   - Cover Letter, Notification Letter, Scoping Worksheet
-   - Reuses data service (no additional Riskuity work)
+5. **Epic 5: Validation Engine** (0.5 weeks) - 3 stories (renumbered from Epic 4)
+   - Template field metadata, Validator service, integration
+   - **Dependency:** Epic 2 complete
 
-6. **Epic 6: Validation & User Feedback** (1 week)
-   - Pre-generation validation
-   - User-facing error messages
+6. **Epic 6: AWS S3 Storage** (0.5 weeks) - 2 stories (renumbered from Epic 5)
+   - S3Storage service, integration into generation flow
+   - **Dependency:** Epic 4 complete
 
-7. **Epic 7: React/Node Integration** (1 week)
-   - Frontend integration
-   - Production deployment
+7. **Epic 7: REST API & React Integration** (0.5 weeks) - 5 stories (renumbered from Epic 6)
+   - Request/response models, API endpoints, CORS, Lambda handler
+   - **Dependency:** Epic 5-6 complete
+
+8. **Epic 8: Testing & AWS Deployment** (1 week) - 6 stories (renumbered from Epic 7)
+   - Unit, integration, e2e tests; AWS SAM infrastructure; deployment
+   - **Dependency:** All epics (test as you build)
 
 **Rationale for Sequence Change:**
-- RIR template is simpler than Draft Report → faster validation of architecture
-- Data service unlocks both RIR and Draft Report → implement once, use twice
-- Learn from RIR implementation before tackling complex Draft Report logic
+1. **Data Service Pattern** (Epic 3.5) enables multi-template efficiency and parallel development
+2. **RIR Template** (Epic 4) validates complete architecture with simpler use case (15 fields vs 50+)
+3. **Conditional Logic** (Epic 2) benefits from architectural lessons learned in Epic 4
+4. **Reduced Risk:** Tackle complex Draft Report logic after validating data flow with RIR
 
-**Next Step:** Run `workflow create-epics-and-stories` to create the detailed implementation breakdown.
+**Critical Path:**
+- **Old:** Epic 1 → Epic 2 (Conditional Logic) → Epic 3 (Riskuity) → Templates
+- **New:** Epic 1 → Epic 3.5 (Data Service) → Epic 4 (RIR) → Epic 2 (Conditional Logic) → Draft Report
+
+**Implementation Status:** ✅ Epic & story breakdown complete in `docs/epics.md`
 
 ---
 
