@@ -658,14 +658,55 @@ This is the heart of CORTAP-RPT's intelligence. The system must implement 9 dist
 
 Requirements will be decomposed into epics and bite-sized stories optimized for 200k context development sessions.
 
-**Anticipated Epic Structure:**
-1. **Epic 1:** Template Engine & Formatting Preservation
-2. **Epic 2:** Conditional Logic Engine (9 patterns)
-3. **Epic 3:** Riskuity API Integration & Data Transform
-4. **Epic 4:** Validation Engine & User Feedback
-5. **Epic 5:** AWS S3 Storage & Document Management
-6. **Epic 6:** React/Node Integration
-7. **Epic 7:** Testing & Deployment
+**Architectural Decision:** ✅ **Data Service Pattern Adopted**
+
+CORTAP-RPT will use a **data service layer** that fetches Riskuity data once, transforms it to a canonical JSON schema, stores it in S3, then feeds multiple templates from the cached JSON. This architecture provides:
+- **Multi-template efficiency:** Generate multiple documents (RIR, Draft Report, Cover Letter) from single data fetch
+- **Caching:** Avoid redundant API calls to Riskuity
+- **Auditability:** JSON files serve as audit trail of data used for generation
+- **Parallel development:** Template developers work with static JSON (no Riskuity API needed)
+- **Data validation:** Catch missing/invalid data before template rendering
+
+**Revised Epic Structure:**
+
+1. **Epic 1: Foundation & Template Engine** (3 weeks) - ✅ IN PROGRESS
+   - Stories: 1.1 (complete), 1.2-1.6 (pending)
+   - No Riskuity dependencies - can proceed immediately
+
+2. **Epic 3.5: Project Data Service** (1 week) - 🆕 NEW
+   - Riskuity API client for 4 endpoints
+   - Data transformer (Riskuity → JSON)
+   - S3 storage with caching/TTL
+   - Data validation engine
+   - `/projects/{id}/data` API endpoint
+   - **Dependency:** Riskuity API access required
+
+3. **Epic 4: Recipient Information Request Template** (1 week) - 🆕 NEW
+   - Simple template (15 fields, 1 conditional pattern)
+   - Validates data service pattern end-to-end
+   - Quick win for stakeholders
+   - **Dependency:** Epic 3.5 complete
+
+4. **Epic 2: Conditional Logic Engine** (2 weeks) - DEFERRED
+   - All 9 complex patterns for Draft Audit Report
+   - **Dependency:** Epic 3.5 complete, Riskuity fields verified
+
+5. **Epic 5: Additional Templates** (2-3 weeks)
+   - Cover Letter, Notification Letter, Scoping Worksheet
+   - Reuses data service (no additional Riskuity work)
+
+6. **Epic 6: Validation & User Feedback** (1 week)
+   - Pre-generation validation
+   - User-facing error messages
+
+7. **Epic 7: React/Node Integration** (1 week)
+   - Frontend integration
+   - Production deployment
+
+**Rationale for Sequence Change:**
+- RIR template is simpler than Draft Report → faster validation of architecture
+- Data service unlocks both RIR and Draft Report → implement once, use twice
+- Learn from RIR implementation before tackling complex Draft Report logic
 
 **Next Step:** Run `workflow create-epics-and-stories` to create the detailed implementation breakdown.
 
@@ -893,18 +934,31 @@ This table maps each conditional logic pattern to required Riskuity fields.
 
 **Phase 1: Foundation (Epic 1) - Weeks 1-3**
 - ✅ **NO Riskuity dependencies** - Can proceed immediately
-- Stories 1.1-1.6 can be completed with mock data
+- Story 1.1: ✅ COMPLETE
+- Stories 1.2-1.6: Pending (logging, exceptions, POC, DocumentGenerator, grammar helpers)
 
-**Phase 2: Conditional Logic (Epic 2) - Weeks 4-5**
+**Phase 2: Data Service Layer (Epic 3.5) - Week 4**
+- ⚠️ **Requires Riskuity API access** (credentials, sample JSON responses)
+- ⚠️ **Requires field verification** from Riskuity team (answers to critical questions)
+- **Can start with mock data** if Riskuity delayed, but must align with actual API schema
+- **Blocks:** Epic 4 (RIR) and Epic 2 (Draft Report) depend on this
+
+**Phase 3: RIR Template (Epic 4) - Week 5**
+- ✅ **Low Riskuity dependency** - Only 15 fields, 1 conditional pattern
+- **Can use mock JSON** from Epic 3.5 if real Riskuity API not ready
+- **Quick win:** Early deliverable for stakeholders
+- **Validates:** Entire data service → JSON → template pattern
+
+**Phase 4: Conditional Logic (Epic 2) - Weeks 6-7**
 - 🔴 **BLOCKED** without Riskuity field verification
-- 6 out of 8 stories depend on Riskuity fields
-- **Can use mock data** if real API not ready, but must match exact schema
+- All 9 complex patterns depend on Riskuity fields
+- **Can use validated mock data** from Epic 3.5
 
-**Phase 3: Riskuity Integration (Epic 3) - Week 6**
-- 🔴 **FULLY BLOCKED** without API access and confirmed field schema
-- All 3 stories require working Riskuity API
+**Phase 5: Additional Templates (Epic 5) - Weeks 8-10**
+- ✅ **NO additional Riskuity work** - Reuses data service from Epic 3.5
+- Cover Letter, Notification Letter, Scoping Worksheet
 
-**Risk:** If Riskuity changes are delayed, Epic 2 and Epic 3 timelines slip.
+**Risk Mitigation:** Data service pattern (Epic 3.5) decouples template development from Riskuity API availability. Templates can be developed against static JSON files while Riskuity integration is finalized.
 
 ---
 

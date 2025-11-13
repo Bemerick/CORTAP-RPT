@@ -2,7 +2,19 @@
 
 ## Executive Summary
 
-CORTAP-RPT is a Python-based document generation microservice that bridges Riskuity (compliance data source) and Microsoft Word (audit report output). The architecture prioritizes formatting preservation, intelligent conditional logic, and integration reliability. This document establishes technical decisions to ensure AI agents implement consistent, maintainable code across all epics.
+CORTAP-RPT is a Python-based document generation microservice that bridges Riskuity (compliance data source) and Microsoft Word (audit report output). The architecture prioritizes formatting preservation, intelligent conditional logic, and integration reliability.
+
+**Architectural Pattern:** **Data Service Layer with JSON Caching**
+
+CORTAP-RPT uses a **data service layer** that fetches Riskuity data once, transforms it to a canonical JSON schema, caches it in S3, then feeds multiple templates from the cached JSON. This architecture provides:
+- **Separation of concerns:** Data fetching/transformation decoupled from template rendering
+- **Multi-template efficiency:** Generate multiple documents (RIR, Draft Report, Cover Letter) from single data fetch
+- **Caching:** Avoid redundant API calls to Riskuity
+- **Auditability:** JSON files serve as audit trail
+- **Parallel development:** Template developers work with static JSON (no Riskuity API needed)
+- **Data validation:** Catch missing/invalid data before template rendering
+
+This document establishes technical decisions to ensure AI agents implement consistent, maintainable code across all epics.
 
 ## Project Initialization
 
@@ -59,6 +71,7 @@ cortap-rpt/
 │   │   ├── __init__.py
 │   │   ├── routes/
 │   │   │   ├── __init__.py
+│   │   │   ├── data.py              # 🆕 POST /api/v1/projects/{id}/data
 │   │   │   ├── generate.py          # POST /api/v1/generate-document
 │   │   │   ├── templates.py         # GET /api/v1/templates
 │   │   │   └── validate.py          # GET /api/v1/validate-data
@@ -70,12 +83,13 @@ cortap-rpt/
 │   │   └── template_data.py         # Template field data models
 │   ├── services/
 │   │   ├── __init__.py
-│   │   ├── document_generator.py    # Core document generation logic
+│   │   ├── data_service.py          # 🆕 Project data fetch, transform, cache orchestrator
+│   │   ├── document_generator.py    # Core document generation logic (consumes JSON)
 │   │   ├── conditional_logic.py     # 9 conditional logic patterns implementation
-│   │   ├── riskuity_client.py       # Riskuity API integration
-│   │   ├── data_transformer.py      # API response → template data mapping
-│   │   ├── validator.py             # Data completeness validation
-│   │   └── s3_storage.py            # S3 upload/download operations
+│   │   ├── riskuity_client.py       # Riskuity API integration (4 endpoints)
+│   │   ├── data_transformer.py      # Riskuity API → canonical JSON schema
+│   │   ├── validator.py             # JSON schema validation & completeness checks
+│   │   └── s3_storage.py            # S3 upload/download (documents + JSON data files)
 │   ├── templates/
 │   │   ├── draft-audit-report.docx  # Word templates with Jinja2 syntax
 │   │   ├── cover-letter.docx
@@ -526,13 +540,30 @@ class AssessmentData(BaseModel):
     date_closed: Optional[datetime] = None
 ```
 
-**Data Flow:**
-1. **Riskuity API Response** → `RiskuityProjectData` (raw API model)
-2. **Data Transformer** → `TemplateData` (template-ready model)
-3. **Validator** → Checks completeness, returns warnings/errors
-4. **Document Generator** → Jinja2 context dict from `TemplateData`
-5. **python-docxtpl** → Rendered Word document (BytesIO)
-6. **S3 Storage** → Uploaded .docx, returns pre-signed URL
+**Data Flow (Data Service Pattern):**
+
+**Phase 1: Data Fetch & Cache** (Epic 3.5)
+1. **Client Request** → `POST /api/v1/projects/{id}/data`
+2. **Data Service** → Check S3 for cached JSON (if exists and fresh, skip to step 7)
+3. **Riskuity API Client** → Fetch from 4 endpoints (projects, assessments, surveys, risks)
+4. **Data Transformer** → Convert to canonical JSON schema
+5. **Validator** → Check completeness, calculate derived fields
+6. **S3 Storage** → Save JSON file with project_id and timestamp
+7. **Response** → Return S3 path to JSON file + data quality metrics
+
+**Phase 2: Document Generation** (Epics 4, 2, 5)
+1. **Client Request** → `POST /api/v1/generate-document` with JSON file path
+2. **Data Service** → Load JSON from S3 (or use provided JSON)
+3. **Document Generator** → Build Jinja2 context from JSON
+4. **Conditional Logic** → Apply 9 patterns based on JSON data
+5. **python-docxtpl** → Render Word document (BytesIO)
+6. **S3 Storage** → Upload .docx, return pre-signed URL
+
+**Benefits:**
+- Multiple templates can use same cached JSON (no redundant API calls)
+- Template development can proceed with static JSON files
+- JSON serves as audit trail of data used for generation
+- Data validation happens once, errors caught early
 
 ### Data Transformation Rules
 
@@ -549,6 +580,90 @@ class AssessmentData(BaseModel):
 - Template output: Converted to template-specific format (e.g., `"November 12, 2025"`)
 
 ## API Contracts
+
+### POST /api/v1/projects/{project_id}/data 🆕
+
+**Purpose:** Fetch and cache all project data from Riskuity as canonical JSON
+
+**Request:**
+```json
+{
+  "force_refresh": false,          // Optional: bypass cache, fetch fresh data
+  "include_assessments": true,
+  "include_erf": true,
+  "include_surveys": false
+}
+```
+
+**Success Response (200 OK):**
+```json
+{
+  "project_id": "RSKTY-12345",
+  "data_file_url": "s3://cortap-rpt-data/RSKTY-12345/2025-03-15T14:32:00_project-data.json",
+  "generated_at": "2025-03-15T14:32:00Z",
+  "data_version": "1.0",
+  "expires_at": "2025-03-15T15:32:00Z",  // 1-hour TTL
+  "completeness": {
+    "missing_critical_fields": [],
+    "missing_optional_fields": ["recipient_website", "erf_items"],
+    "data_quality_score": 95,
+    "warnings": ["Contractor information not provided"]
+  }
+}
+```
+
+**Error Response (500 Internal Server Error):**
+```json
+{
+  "error_code": "RISKUITY_API_ERROR",
+  "message": "Failed to fetch data from Riskuity API",
+  "details": {
+    "endpoint": "/v1/projects/RSKTY-12345",
+    "status_code": 503,
+    "retry_count": 3
+  },
+  "timestamp": "2025-03-15T14:32:00Z",
+  "correlation_id": "req-xyz789"
+}
+```
+
+**JSON Schema Example:**
+```json
+{
+  "project_id": "RSKTY-12345",
+  "generated_at": "2025-03-15T14:32:00Z",
+  "data_version": "1.0",
+  "project": {
+    "recipient_name": "Massachusetts Bay Transportation Authority",
+    "recipient_acronym": "MBTA",
+    "recipient_id": "1057",
+    "recipient_city_state": "Boston, MA",
+    "recipient_website": "https://www.mbta.com",
+    "region_number": 1,
+    "review_type": "Triennial Review"
+  },
+  "contractor": {
+    "name": "Milligan & Company",
+    "lead_reviewer_name": "Scott W. Schilt",
+    "lead_reviewer_phone": "215-496-9100 ext 183",
+    "lead_reviewer_email": "sschilt@milligancpa.com"
+  },
+  "fta_program_manager": {
+    "name": "John Smith",
+    "phone": "(202) 555-0123",
+    "email": "john.smith@dot.gov"
+  },
+  "assessments": [...],
+  "erf_items": [],
+  "metadata": {
+    "has_deficiencies": false,
+    "deficiency_count": 0,
+    "erf_count": 0
+  }
+}
+```
+
+---
 
 ### POST /api/v1/generate-document
 
