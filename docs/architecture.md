@@ -942,6 +942,524 @@ sam local start-api
 4. Run integration tests: `pytest tests/integration/` (requires AWS credentials)
 5. Deploy to dev: `sam deploy --config-env dev`
 
+## Multi-Tenant Integration Architecture
+
+### Deployment Model
+
+CORTAP-RPT operates as a **shared service** serving multiple Riskuity tenant instances:
+
+- **One CORTAP-RPT deployment** (Lambda + API Gateway + S3)
+- **N Riskuity tenant instances** (separate AWS deployments per contractor/customer)
+- **Strict tenant isolation** via API key authentication and S3 prefix enforcement
+
+**Riskuity Deployment Context:**
+- Each FTA contractor has a separate Riskuity instance (e.g., Contractor A, Contractor B)
+- Riskuity instances are deployed per-customer in AWS (physically separate)
+- Future contractors adopting Riskuity will receive new tenant instances
+- Data isolation is a compliance requirement (hard constraint)
+
+**Architecture Pattern:** Shared CORTAP-RPT service with logical tenant isolation
+
+```
+┌──────────────────┐
+│  Riskuity        │  API Key A → tenant_id: "fta-contractor-a"
+│  (Contractor A)  │────┐
+└──────────────────┘    │
+                        │
+┌──────────────────┐    │    ┌─────────────────────────────┐
+│  Riskuity        │  ──┼───→│   API Gateway               │
+│  (Contractor B)  │  ──┼───→│   (API Key Validation)      │
+└──────────────────┘    │    └─────────────────────────────┘
+                        │                  ↓
+┌──────────────────┐    │    ┌─────────────────────────────┐
+│  Riskuity        │  ──┘    │   CORTAP-RPT Lambda         │
+│  (Contractor C)  │         │   (Tenant Context Injected) │
+└──────────────────┘         └─────────────────────────────┘
+                                           ↓
+                             ┌─────────────────────────────┐
+                             │   S3 Bucket                 │
+                             │   /fta-contractor-a/        │
+                             │   /fta-contractor-b/        │
+                             │   /fta-contractor-c/        │
+                             └─────────────────────────────┘
+```
+
+### Tenant Identification & Isolation
+
+**Request Flow:**
+1. Riskuity tenant instance calls CORTAP-RPT with tenant-specific API key
+2. API Gateway Lambda Authorizer validates key → identifies `tenant_id`
+3. `tenant_id` injected into Lambda event context (immutable)
+4. All services receive `TenantContext` via dependency injection
+5. S3 storage uses strict prefix enforcement: `{tenant_id}/data/` and `{tenant_id}/documents/`
+
+**Tenant Configuration Storage:**
+
+DynamoDB Table: `cortap-tenant-config`
+```python
+{
+  "api_key_hash": "sha256(api_key)",        # Primary key
+  "tenant_id": "fta-contractor-a",
+  "tenant_name": "FTA Contractor A Reviews",
+  "riskuity_instance_url": "https://fta-contractor-a.riskuity.aws.com/api/v1",
+  "riskuity_api_key": "arn:aws:secretsmanager:...",  # Reference to Secrets Manager
+  "s3_prefix": "fta-contractor-a/",
+  "enabled": true,
+  "created_at": "2025-03-15T00:00:00Z"
+}
+```
+
+**API Gateway Lambda Authorizer:**
+
+```python
+# lambda/authorizer.py
+import hashlib
+import boto3
+
+def lambda_handler(event, context):
+    """Validates API key and injects tenant context"""
+    api_key = event['headers'].get('x-api-key')
+
+    if not api_key:
+        raise Exception('Unauthorized')
+
+    # Lookup tenant by API key hash
+    key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+    tenant = dynamodb.Table('cortap-tenant-config').get_item(Key={'api_key_hash': key_hash})
+
+    if 'Item' not in tenant or not tenant['Item']['enabled']:
+        raise Exception('Unauthorized')
+
+    return {
+        'principalId': tenant['Item']['tenant_id'],
+        'policyDocument': generate_allow_policy(event['methodArn']),
+        'context': {
+            'tenant_id': tenant['Item']['tenant_id']  # Passed to Lambda
+        }
+    }
+```
+
+**Tenant Context Injection:**
+
+```python
+# app/api/dependencies.py
+from fastapi import Request, HTTPException
+from app.models.tenant import TenantContext
+
+async def get_tenant_context(request: Request) -> TenantContext:
+    """Extract tenant context from API Gateway authorizer"""
+    tenant_id = request.scope.get('aws.event', {}).get('requestContext', {}) \
+                      .get('authorizer', {}).get('tenant_id')
+
+    if not tenant_id:
+        raise HTTPException(status_code=401, detail="Tenant context missing")
+
+    # Load full tenant configuration
+    tenant_service = TenantService()
+    return await tenant_service.get_tenant_config(tenant_id)
+```
+
+**S3 Prefix Enforcement:**
+
+```python
+# app/services/s3_storage.py
+class S3Storage:
+    def __init__(self, tenant_id: str):
+        self.tenant_prefix = f"{tenant_id}/"  # All paths prefixed with tenant_id
+
+    async def upload_document(self, project_id: str, filename: str, data: BinaryIO) -> str:
+        """Upload with strict tenant isolation"""
+        s3_key = f"{self.tenant_prefix}documents/{project_id}/{filename}"
+        # All operations automatically scoped to tenant prefix
+```
+
+**S3 Bucket Structure:**
+
+```
+s3://cortap-documents-prod/
+├── fta-contractor-a/              ← Tenant A (isolated)
+│   ├── data/
+│   │   ├── RSKTY-001_project-data.json
+│   │   └── RSKTY-002_project-data.json
+│   └── documents/
+│       ├── RSKTY-001/
+│       │   ├── draft-audit-report_2025-03-15.docx
+│       │   └── cover-letter_2025-03-15.docx
+│       └── RSKTY-002/
+│           └── draft-audit-report_2025-03-16.docx
+│
+├── fta-contractor-b/              ← Tenant B (isolated)
+│   ├── data/
+│   │   └── RSKTY-100_project-data.json
+│   └── documents/
+│       └── RSKTY-100/
+│           └── draft-audit-report_2025-03-20.docx
+```
+
+### Call Patterns
+
+#### Pattern 1: Fetch & Cache Project Data
+
+**Purpose:** Retrieve data from Riskuity, transform to canonical JSON, validate, and cache in S3
+
+**When:** Auditor opens project page or clicks "Prepare Data" button
+
+**Flow:**
+```
+Riskuity UI → POST /api/v1/projects/{id}/data
+            → CORTAP fetches from Riskuity API (4 endpoints)
+            → Transforms to canonical JSON schema
+            → Validates completeness
+            → Caches in S3: {tenant}/data/{project_id}.json
+            → Returns metadata + data quality report
+```
+
+**Request:**
+```http
+POST /api/v1/projects/RSKTY-001/data
+X-API-Key: {tenant_api_key}
+Content-Type: application/json
+
+{
+  "force_refresh": false,          // Optional: bypass cache
+  "include_assessments": true,
+  "include_erf": true,
+  "include_surveys": false
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "project_id": "RSKTY-001",
+  "data_file_id": "RSKTY-001_2025-03-15",
+  "data_quality_score": 95,
+  "missing_critical_fields": [],
+  "missing_optional_fields": ["contractor_phone"],
+  "cached_until": "2025-03-15T15:00:00Z",
+  "ready_for_generation": true,
+  "warnings": ["Contractor phone number not provided"]
+}
+```
+
+**Riskuity stores metadata:**
+- `data_file_id` (reference to cached JSON)
+- `cached_at` timestamp
+- `data_quality_score`
+- Enables "Generate Document" button if `ready_for_generation = true`
+
+**Note:** Riskuity does NOT receive the JSON file itself - only metadata confirming data is ready.
+
+---
+
+#### Pattern 2: Generate Document (MVP - Synchronous)
+
+**Purpose:** Generate Word document from cached JSON data
+
+**When:** Auditor clicks "Generate Report" button
+
+**Flow:**
+```
+Riskuity UI → POST /api/v1/generate-document
+            → CORTAP loads cached JSON from S3
+            → Renders Word document (python-docxtpl)
+            → Uploads .docx to S3
+            → Generates pre-signed URL (24hr expiration)
+            → Returns download URL + metadata
+            → [User waits 30-60 seconds]
+Riskuity UI → Receives response
+            → Stores metadata in database
+            → Initiates browser download OR displays download link
+```
+
+**Request:**
+```http
+POST /api/v1/generate-document
+X-API-Key: {tenant_api_key}
+Content-Type: application/json
+
+{
+  "project_id": "RSKTY-001",
+  "template_id": "draft-audit-report",
+  "user_id": "auditor@contractor-a.com",
+  "format": "docx"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "document_id": "550e8400-e29b-41d4-a716-446655440000",
+  "download_url": "https://cortap-docs.s3.amazonaws.com/fta-contractor-a/documents/RSKTY-001/draft-audit-report_2025-03-15.docx?X-Amz-Signature=...",
+  "filename": "MBTA_Draft_Audit_Report_2025-03-15.docx",
+  "expires_at": "2025-03-16T10:30:00Z",
+  "generated_at": "2025-03-15T10:30:00Z",
+  "warnings": [
+    "Optional field [recipient_phone] was missing - used default 'N/A'"
+  ]
+}
+```
+
+**Riskuity Integration (React):**
+
+```javascript
+// Generate and download document
+const generateReport = async (projectId, templateId) => {
+  setLoading(true);
+
+  try {
+    const response = await fetch('/api/cortap/generate', {
+      method: 'POST',
+      body: JSON.stringify({
+        project_id: projectId,
+        template_id: templateId,
+        user_id: currentUser.email
+      })
+    });
+
+    const result = await response.json();
+
+    // Store metadata in Riskuity database
+    await saveGeneratedDocument({
+      projectId,
+      documentId: result.document_id,
+      downloadUrl: result.download_url,
+      filename: result.filename,
+      expiresAt: result.expires_at,
+      generatedAt: result.generated_at
+    });
+
+    // Immediate download
+    window.location.href = result.download_url;
+
+    showNotification('Report generated successfully!');
+
+  } catch (error) {
+    showError('Failed to generate report. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+};
+```
+
+---
+
+#### Pattern 3: Refresh Expired Download URL
+
+**Purpose:** Generate fresh pre-signed URL for existing document (after 24hr expiration)
+
+**When:** User clicks download link after URL has expired
+
+**Request:**
+```http
+GET /api/v1/documents/{document_id}/url
+X-API-Key: {tenant_api_key}
+```
+
+**Response (200 OK):**
+```json
+{
+  "download_url": "https://cortap-docs.s3.amazonaws.com/...",
+  "expires_at": "2025-03-17T10:30:00Z"
+}
+```
+
+**Riskuity Integration:**
+
+```javascript
+const downloadDocument = async (documentId) => {
+  const doc = await getStoredDocument(documentId);
+
+  if (new Date(doc.expiresAt) > new Date()) {
+    // URL still valid
+    window.location.href = doc.downloadUrl;
+  } else {
+    // URL expired - get fresh URL
+    const response = await fetch(`/api/cortap/documents/${documentId}/url`);
+    const { download_url, expires_at } = await response.json();
+
+    // Update stored URL
+    await updateDocumentUrl(documentId, download_url, expires_at);
+
+    window.location.href = download_url;
+  }
+};
+```
+
+### File Access Strategy
+
+**Documents:** Stored in CORTAP-RPT S3, accessed via pre-signed URLs
+- Files stored: `{tenant}/documents/{project}/{filename}.docx`
+- Pre-signed URLs valid for 24 hours
+- Riskuity stores metadata + URLs in database
+- Users download directly from S3 (browser → S3, no proxy)
+- After expiration, call `/documents/{id}/url` for fresh URL
+
+**JSON Data Files:** Intermediate cache (not exposed to users)
+- Files stored: `{tenant}/data/{project_id}_project-data.json`
+- Purpose: Avoid redundant Riskuity API calls, enable multi-template generation
+- Access: Internal to CORTAP-RPT only (not exposed via API)
+- Lifecycle: 1-hour cache (configurable), auto-refresh if expired
+
+**Why Pre-Signed URLs (MVP):**
+- ✅ Simple integration (no Riskuity backend changes)
+- ✅ Fast user experience (direct S3 download)
+- ✅ Secure (tenant isolation via S3 prefix, time-limited URLs)
+- ✅ Scalable (S3 handles download bandwidth)
+- ✅ Proven pattern (DocuSign, Adobe Sign use similar approach)
+
+**Future Enhancement (v2):** Option to transfer files to Riskuity storage if long-term archival within Riskuity is required
+
+### Security & Compliance
+
+**Data Isolation Guarantees:**
+
+| Layer | Isolation Mechanism |
+|-------|---------------------|
+| API Layer | API Gateway authorizer validates API key → immutable `tenant_id` |
+| Application Layer | All services receive `tenant_id` via dependency injection |
+| Storage Layer | S3 paths enforced with tenant prefix (cannot escape) |
+| Network Layer | Each Riskuity instance is separate AWS deployment |
+
+**Attack Scenarios Prevented:**
+
+| Attack | Prevention |
+|--------|------------|
+| Tenant A accesses Tenant B's project | API key validation fails OR project_id doesn't exist in Tenant A's Riskuity |
+| Malicious API key | API Gateway rejects (key not in DynamoDB) |
+| Code bug tries to read wrong S3 prefix | S3 client always constructs path with `self.tenant_prefix` |
+| Cross-tenant data leakage | All operations scoped by `tenant_id` from authorizer context |
+
+**Audit Trail:**
+
+CloudWatch Logs (structured JSON):
+```json
+{
+  "timestamp": "2025-03-15T10:30:00Z",
+  "level": "INFO",
+  "tenant_id": "fta-contractor-a",
+  "correlation_id": "req-abc123",
+  "action": "generate_document",
+  "project_id": "RSKTY-001",
+  "template_id": "draft-audit-report",
+  "user_id": "auditor@contractor-a.com",
+  "s3_key": "fta-contractor-a/documents/RSKTY-001/draft-audit-report_2025-03-15.docx"
+}
+```
+
+Optional: DynamoDB activity log for compliance tracking (every generation logged)
+
+### Tenant Onboarding Process
+
+**When new contractor adopts Riskuity + CORTAP-RPT:**
+
+**Step 1: Riskuity Admin**
+1. Deploy new Riskuity instance for Contractor B
+2. Generate Riskuity API key for CORTAP-RPT integration
+3. Contact CORTAP-RPT admin with tenant details
+
+**Step 2: CORTAP-RPT Admin Provisions Tenant**
+
+```bash
+# Run provisioning script
+python scripts/provision_tenant.py \
+  --tenant-id fta-contractor-b \
+  --tenant-name "FTA Contractor B Reviews" \
+  --riskuity-url https://fta-contractor-b.riskuity.aws.com/api/v1 \
+  --riskuity-api-key <secret_key>
+```
+
+Script performs:
+- Generate API key for Contractor B → CORTAP-RPT calls
+- Store tenant config in DynamoDB
+- Store Riskuity API key in Secrets Manager (encrypted)
+- Create S3 prefix `/fta-contractor-b/`
+- Return API key to Riskuity Admin
+
+**Step 3: Riskuity Admin Configures Integration**
+
+Configure CORTAP integration in Contractor B's Riskuity instance:
+```json
+{
+  "cortap_rpt_api_url": "https://cortap-api.fta.gov/api/v1",
+  "cortap_rpt_api_key": "<generated_in_step_2>",
+  "enabled": true
+}
+```
+
+**Step 4: Testing**
+
+```bash
+# Test call from Riskuity Contractor B
+curl -X POST https://cortap-api.fta.gov/api/v1/generate-document \
+  -H "X-API-Key: <contractor_b_api_key>" \
+  -d '{"project_id": "RSKTY-100", "template_id": "draft-audit-report"}'
+```
+
+**Provisioning Time:** ~5 minutes per new tenant
+
+### Updated Components for Multi-Tenancy
+
+**New Components:**
+
+| Component | Purpose | Location |
+|-----------|---------|----------|
+| DynamoDB Table | Store tenant configuration | `cortap-tenant-config` |
+| Lambda Authorizer | API key validation + tenant identification | `lambda/authorizer.py` |
+| Tenant Service | Load tenant configuration | `app/services/tenant_service.py` |
+| Tenant Context Model | Pydantic model for tenant data | `app/models/tenant.py` |
+| Provisioning Script | Admin tool for tenant onboarding | `scripts/provision_tenant.py` |
+
+**Modified Components:**
+
+| Component | Change |
+|-----------|--------|
+| All API Routes | Inject `TenantContext` dependency |
+| All Services | Accept `tenant_id` parameter in constructor |
+| S3Storage | Constructor takes `tenant_id`, enforces prefix |
+| RiskuityClient | Constructor takes `TenantContext` with tenant-specific URL/API key |
+
+**SAM Template Updates:**
+
+```yaml
+Resources:
+  # New: Lambda Authorizer
+  CORTAPAuthorizer:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.11
+      Handler: authorizer.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref TenantConfigTable
+
+  # New: DynamoDB for tenant config
+  TenantConfigTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: cortap-tenant-config
+      AttributeDefinitions:
+        - AttributeName: api_key_hash
+          AttributeType: S
+      KeySchema:
+        - AttributeName: api_key_hash
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  # Updated: API Gateway uses authorizer
+  CORTAPApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Auth:
+        Authorizers:
+          LambdaAuthorizer:
+            FunctionArn: !GetAtt CORTAPAuthorizer.Arn
+            AuthorizerPayloadFormatVersion: 2.0
+```
+
+---
+
 ## Architecture Decision Records (ADRs)
 
 ### ADR-001: FastAPI over Flask
@@ -996,8 +1514,29 @@ sam local start-api
 - Team already familiar with CloudFormation
 **Tradeoffs:** AWS-specific (not multi-cloud), but no multi-cloud requirement exists
 
+### ADR-007: Shared Service Multi-Tenancy over Per-Instance Deployment
+**Decision:** Deploy one CORTAP-RPT instance serving multiple Riskuity tenants
+**Rationale:**
+- Operational simplicity: 1 deployment vs N deployments
+- Cost efficiency: Shared Lambda, pay-per-use model
+- Proven isolation pattern: API key → tenant_id → S3 prefix enforcement
+- Easy tenant onboarding: 5-minute provisioning vs 30-minute deployment
+- Lambda scales perfectly for variable load across tenants
+**Tradeoffs:** Requires multi-tenant code (tenant context management), but complexity is manageable and preferable to operational overhead of N deployments
+
+### ADR-008: Pre-Signed S3 URLs over File Transfer to Riskuity
+**Decision:** Store documents in CORTAP S3, provide pre-signed URLs to Riskuity
+**Rationale:**
+- Simple integration: No Riskuity backend changes required
+- Fast user experience: Direct browser → S3 download (no proxy)
+- Proven security pattern: Time-limited, tenant-scoped URLs
+- CORTAP owns lifecycle: Can enforce 90-day retention policy
+- URL refresh endpoint handles expiration gracefully
+**Tradeoffs:** Files not "inside" Riskuity, URLs expire (mitigated by refresh endpoint), but acceptable for MVP
+
 ---
 
 _Generated by BMAD Decision Architecture Workflow v1.3.2_
 _Date: 2025-11-12_
+_Updated: 2025-11-19 (Multi-Tenant Integration)_
 _For: Bob_

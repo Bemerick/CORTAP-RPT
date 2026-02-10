@@ -1,8 +1,28 @@
 # generated: 2025-11-12
+# updated: 2025-12-03
 # project: CORTAP-RPT
 # project_key: CORTAP-RPT
 # tracking_system: file-system
 # story_location: /Users/bob.emerick/dev/AI-projects/CORTAP-RPT/docs/stories
+
+# CURRENT SPRINT STATUS (2025-12-04):
+# =====================================
+# Current Epic: Epic 4 (RIR Template) - COMPLETE! 🎉
+# Current Story: N/A - Production RIR generation complete!
+# Recent Achievement: Generated 36 FY2026 RIR documents from Excel spreadsheet ✅
+# Next Options:
+#   1. Story 4.6 - E2E testing with Riskuity integration
+#   2. Epic 6 - Build React app to test API endpoints
+#   3. Epic 3.5 - Implement Riskuity API data service
+#   4. Story 1.5.8 - Document Draft Report POC results
+# Completed Epics: Epic 1 (Foundation) ✅, Epic 4 (RIR Template) ✅
+# Epic Sequence: 0 → 1 → 1.5 (POC) → 3.5 → 4 (RIR) → 2 → 3 → 4 (Validation) → 5 → 6 → 7
+# Achievements:
+#   - RIR API endpoints complete! Stories 4.1-4.5 DONE! ✅
+#   - Excel-based RIR generation workflow complete! 36 docs generated! 🎯
+# Completed Stories: 1.1-1.3, 1.5, 1.5.1-1.5.7, 3.5.1, 4.1, 4.3-4.5 (1.4 & 4.2 skipped, 1.6 deferred)
+# API Ready: POST /generate-document and GET /templates working with mock data
+# Production Tools: scripts/generate_rirs_from_excel.py - bulk RIR generation from tracking spreadsheet
 
 # STATUS DEFINITIONS:
 # ==================
@@ -36,19 +56,43 @@ tracking_system: file-system
 story_location: /Users/bob.emerick/dev/AI-projects/CORTAP-RPT/docs/stories
 
 development_status:
+  # Epic 0: Multi-Tenant Foundation
+  epic-0: backlog
+  0-1-create-dynamodb-tenant-configuration-table: backlog
+  0-2-implement-lambda-authorizer-for-api-key-validation: backlog
+  0-3-create-tenant-context-model-and-service: backlog
+  0-4-implement-tenant-context-dependency-injection: backlog
+  0-5-update-s3storage-service-for-tenant-isolation: backlog
+  0-6-update-riskuityclient-for-tenant-specific-urls: backlog
+  0-7-create-tenant-provisioning-script: backlog
+  0-8-update-sam-template-for-multi-tenant-infrastructure: backlog
+  epic-0-retrospective: optional
+
   # Epic 1: Foundation & Template Engine
   epic-1: backlog
-  1-1-initialize-fastapi-project-structure: review
-  1-2-implement-structured-json-logging: backlog
-  1-3-implement-custom-exception-hierarchy: backlog
-  1-4-poc-validate-python-docxtpl-with-draft-audit-report-template: backlog
-  1-5-implement-documentgenerator-service-core: backlog
-  1-6-implement-grammar-helper-utilities: backlog
+  1-1-initialize-fastapi-project-structure: done
+  1-2-implement-structured-json-logging: done
+  1-3-implement-custom-exception-hierarchy: done
+  1-4-poc-validate-python-docxtpl-with-draft-audit-report-template: skipped  # Merged into Epic 4 (RIR POC)
+  1-5-implement-documentgenerator-service-core: done
+  1-6-implement-grammar-helper-utilities: backlog  # Deferred - not needed for Epic 4
   epic-1-retrospective: optional
 
-  # Epic 3.5: Project Data Service (NEW - Data Service Pattern)
+  # Epic 1.5: Draft Report Conditional Logic POC
+  epic-1-5: in-progress
+  1-5-1-extract-and-document-form-fields-from-draft-report-template: done
+  1-5-2-map-conditional-logic-patterns-to-template-sections: done
+  1-5-3-extract-example-data-from-prior-year-reports: done
+  1-5-4-create-mock-json-files-from-extracted-data: done
+  1-5-5-convert-draft-report-template-to-python-docxtpl-format: done  # Template complete, promoted to production, all tests passing
+  1-5-6-implement-poc-document-generation-script: done  # test_all_mock_files.py created and validates 5 outputs
+  1-5-7-validate-all-9-conditional-logic-patterns: done  # All 9 patterns tested and working in 5 mock scenarios
+  1-5-8-document-poc-results-and-extract-lessons-learned: backlog
+  epic-1-5-retrospective: optional
+
+  # Epic 3.5: Project Data Service
   epic-3-5: backlog
-  3-5-1-design-canonical-json-schema-for-project-data: backlog
+  3-5-1-design-canonical-json-schema-for-project-data: done
   3-5-2-implement-riskuity-api-client-with-retry-logic: backlog
   3-5-3-implement-data-transformer-riskuity-to-json: backlog
   3-5-4-implement-s3-storage-for-json-data-files: backlog
@@ -57,17 +101,18 @@ development_status:
   3-5-7-implement-post-api-v1-projects-project-id-data-endpoint: backlog
   epic-3-5-retrospective: optional
 
-  # Epic 4: Recipient Information Request Template (NEW - RIR)
-  epic-4: backlog
-  4-1-convert-rir-template-to-docxtpl-format: backlog
-  4-2-implement-review-type-conditional-logic-cl-rir-1: backlog
-  4-3-create-rir-data-model-and-context-builder: backlog
-  4-4-integrate-rir-with-data-service-json-to-template: backlog
-  4-5-add-rir-to-document-generation-api: backlog
-  4-6-end-to-end-testing-with-real-riskuity-data-structure: backlog
+  # Epic 4: Recipient Information Request (RIR) Template
+  epic-4: done  # ✅ COMPLETE - Production RIR generation working!
+  4-1-convert-rir-template-to-docxtpl-format: done
+  4-2-implement-review-type-conditional-logic-cl-rir-1: skipped  # Template uses {{ review_type }} directly - no logic needed
+  4-3-create-rir-data-model-and-context-builder: done
+  4-4-integrate-rir-with-data-service-json-to-template: done  # Integration tests + generation script created
+  4-5-add-rir-to-document-generation-api: done  # POST /generate-document and GET /templates endpoints working ✅
+  4-6-end-to-end-testing-with-real-riskuity-data-structure: backlog  # Deferred - production Excel workflow complete
+  epic-4-ad-hoc-excel-based-rir-generation: done  # 🎯 BONUS: Created scripts/generate_rirs_from_excel.py - generated 36 FY2026 RIRs!
   epic-4-retrospective: optional
 
-  # Epic 2: Conditional Logic Engine (DEFERRED - moved after Epic 4)
+  # Epic 2: Conditional Logic Engine
   epic-2: backlog
   2-1-define-template-data-models-with-pydantic: backlog
   2-2-implement-review-type-routing-cl-1: backlog
@@ -79,34 +124,41 @@ development_status:
   2-8-implement-conditionallogic-service-integration: backlog
   epic-2-retrospective: optional
 
-  # Epic 5: Validation Engine (renumbered from Epic 4)
+  # Epic 3: Riskuity API Integration
+  epic-3: backlog
+  3-1-implement-riskuity-api-client-with-retry-logic: backlog
+  3-2-implement-data-transformer-service: backlog
+  3-3-implement-end-to-end-data-retrieval-flow: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: Validation Engine & User Feedback (NOTE: Duplicate Epic 4 number in epics.md)
+  epic-4-validation: backlog
+  4-1-create-template-field-metadata-definitions: backlog
+  4-2-implement-validator-service: backlog
+  4-3-integrate-validation-into-document-generation-flow: backlog
+  epic-4-validation-retrospective: optional
+
+  # Epic 5: AWS S3 Storage & Document Management
   epic-5: backlog
-  5-1-create-template-field-metadata-definitions: backlog
-  5-2-implement-validator-service: backlog
-  5-3-integrate-validation-into-document-generation-flow: backlog
+  5-1-implement-s3storage-service: backlog
+  5-2-integrate-s3-upload-into-document-generation-flow: backlog
   epic-5-retrospective: optional
 
-  # Epic 6: AWS S3 Storage (renumbered from Epic 5)
+  # Epic 6: REST API & React Integration
   epic-6: backlog
-  6-1-implement-s3storage-service: backlog
-  6-2-integrate-s3-upload-into-document-generation-flow: backlog
+  6-1-implement-pydantic-request-and-response-models: backlog
+  6-2-implement-post-api-v1-generate-document-endpoint: backlog
+  6-3-implement-get-api-v1-templates-endpoint: backlog
+  6-4-implement-get-api-v1-validate-data-endpoint: backlog
+  6-5-configure-fastapi-app-with-cors-and-lambda-handler: backlog
   epic-6-retrospective: optional
 
-  # Epic 7: REST API & React Integration (renumbered from Epic 6)
+  # Epic 7: Testing & AWS Deployment
   epic-7: backlog
-  7-1-implement-pydantic-request-and-response-models: backlog
-  7-2-implement-post-api-v1-generate-document-endpoint: backlog
-  7-3-implement-get-api-v1-templates-endpoint: backlog
-  7-4-implement-get-api-v1-validate-data-endpoint: backlog
-  7-5-configure-fastapi-app-with-cors-and-lambda-handler: backlog
+  7-1-implement-unit-tests-for-all-services: backlog
+  7-2-implement-integration-tests: backlog
+  7-3-implement-end-to-end-api-tests: backlog
+  7-4-create-aws-sam-infrastructure-template: backlog
+  7-5-create-lambda-deployment-package: backlog
+  7-6-deploy-to-aws-and-validate: backlog
   epic-7-retrospective: optional
-
-  # Epic 8: Testing & AWS Deployment (renumbered from Epic 7)
-  epic-8: backlog
-  8-1-implement-unit-tests-for-all-services: backlog
-  8-2-implement-integration-tests: backlog
-  8-3-implement-end-to-end-api-tests: backlog
-  8-4-create-aws-sam-infrastructure-template: backlog
-  8-5-create-lambda-deployment-package: backlog
-  8-6-deploy-to-aws-and-validate: backlog
-  epic-8-retrospective: optional

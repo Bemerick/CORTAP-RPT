@@ -1,0 +1,280 @@
+{
+  "project_id": "NTS-FY2023-TR-2413",
+  "generated_at": "2025-11-19T16:00:00Z",
+  "data_version": "1.0",
+
+  "project": {
+    "recipient_name": "City of Nashua",
+    "recipient_acronym": "NTS",
+    "recipient_id": "2413",
+    "recipient_city_state": "Nashua, New Hampshire",
+    "recipient_website": null,
+    "region_number": 1,
+    "review_type": "Triennial Review",
+    "fiscal_year": 2023,
+    "scoping_meeting_date": "2023-02-24",
+    "site_visit_start_date": "2023-03-28",
+    "site_visit_end_date": "2023-05-17",
+    "exit_conference_date": "2023-05-17",
+    "exit_conference_format": "virtual",
+    "report_date": "2023-07-11"
+  },
+
+  "fta_program_manager": {
+    "name": "Peter S. Butler",
+    "title": "Regional Administrator",
+    "phone": "617-494-2729",
+    "email": "peter.butler@dot.gov",
+    "region": "Region 1"
+  },
+
+  "regional_officer": {
+    "name": "Gina Filosa",
+    "title": "Regional Administrator"
+  },
+
+  "contractor": {
+    "name": "Qi Tech, LLC",
+    "lead_reviewer_name": "Gwen Larson",
+    "lead_reviewer_phone": "920-746-4595",
+    "lead_reviewer_email": "gwen_larson@qitechllc.com"
+  },
+
+  "assessments": [
+    {
+      "review_area": "Legal",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Financial Management and Capacity",
+      "finding": "D",
+      "deficiency_code": "F6-3",
+      "description": "Single Audit submission deficient, including late submission. Per 2 CFR Part 200.512, recipients must submit Single Audit within 9 months after end of audit period. City of Nashua fiscal year ends June 30th, required submission by March 30th. Due to staffing shortages: FY2020 submitted 3 months late, FY2021 submitted 13 months late, FY2022 not yet submitted.",
+      "corrective_action": "By March 30, 2024, NTS must upload into OTrak procedures to ensure Single Audit report, data collection form, and reporting package are submitted on time in Federal Audit Clearinghouse. Notify FTA regional office via email once uploaded.",
+      "due_date": "2024-03-30",
+      "date_closed": null
+    },
+    {
+      "review_area": "Technical Capacity – Award Management",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Technical Capacity – Program Management & Subrecipient Oversight",
+      "finding": "NA",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Technical Capacity – Project Management",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Transit Asset Management",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Satisfactory Continuing Control",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Maintenance",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Procurement",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Disadvantaged Business Enterprise (DBE)",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Title VI",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Americans with Disabilities Act (ADA) – General",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "ADA – Complementary Paratransit",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Equal Employment Opportunity",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "School Bus",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Charter Bus",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Drug Free Workplace Act",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Drug and Alcohol Program",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Section 5307 Program Requirements",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Section 5310 Program Requirements",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Section 5311 Program Requirements",
+      "finding": "NA",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Public Transportation Agency Safety Plan (PTASP)",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Cybersecurity",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    }
+  ],
+
+  "erf_items": [],
+
+  "subrecipient": {
+    "reviewed": false,
+    "name": null,
+    "city_state": null,
+    "program_section": null
+  },
+
+  "attendees": {
+    "recipient": [],
+    "subrecipients": [],
+    "contractors_lessees": [],
+    "fta": [],
+    "contractor": []
+  },
+
+  "metadata": {
+    "has_deficiencies": true,
+    "deficiency_count": 1,
+    "deficiency_areas": "Financial Management and Capacity",
+    "erf_count": 0,
+    "erf_areas": "",
+    "covid19_context": true,
+    "first_time_operating_assistance": true,
+    "no_repeat_deficiencies": true
+  }
+}

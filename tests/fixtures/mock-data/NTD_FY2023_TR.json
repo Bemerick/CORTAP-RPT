@@ -1,0 +1,417 @@
+{
+  "project_id": "NTD-FY2023-TR-1339",
+  "generated_at": "2025-11-19T16:00:00Z",
+  "data_version": "1.0",
+
+  "project": {
+    "recipient_name": "Norwalk Transit District",
+    "recipient_acronym": "NTD",
+    "recipient_id": "1339",
+    "recipient_city_state": "Norwalk, Connecticut",
+    "recipient_city": "Norwalk",
+    "recipient_state": "Connecticut",
+    "recipient_zip": "06850",
+    "recipient_address": "287 East Avenue",
+    "recipient_contact_name": "David Suarez",
+    "recipient_contact_title": "General Manager",
+    "recipient_salutation": "Mr.",
+    "recipient_last_name": "Suarez",
+    "recipient_website": null,
+    "region_number": 1,
+    "regional_office_header": "U.S. Department of Transportation\nFederal Transit Administration\nRegion 1\n55 Broadway, Suite 920\nCambridge, MA 02142",
+    "review_type": "Triennial Review",
+    "report_status": "Draft",
+    "fiscal_year": 2023,
+    "desk_review_date": "2023-01-15",
+    "scoping_meeting_date": "2023-02-24",
+    "site_visit_start_date": "2023-03-28",
+    "site_visit_end_date": "2023-05-15",
+    "exit_conference_date": "2023-05-15",
+    "exit_conference_format": "virtual",
+    "report_date": "2023-07-11",
+    "comment_deadline": "2023-08-15",
+    "previous_review_year": 2020,
+    "process_dates": [
+      {
+        "date": "January 3, 2023",
+        "process": "FTA transmittal of the Recipient Information Request (RIR)"
+      },
+      {
+        "date": "January 15, 2023",
+        "process": "Recipient Transmittal of RIR to Reviewers"
+      },
+      {
+        "date": "February 24, 2023",
+        "process": "FTA and Reviewers Scoping Meeting/Desk Review"
+      },
+      {
+        "date": "March 20, 2023",
+        "process": "Reviewer Transmittal of the Agenda Package"
+      },
+      {
+        "date": "March 28, 2023",
+        "process": "Site Visit: Entrance Conference"
+      },
+      {
+        "date": "May 15, 2023",
+        "process": "Site Visit: Exit Conference"
+      },
+      {
+        "date": "July 11, 2023",
+        "process": "FTA Transmittal of the Draft Report"
+      },
+      {
+        "date": "August 15, 2023",
+        "process": "Final Report to be sent to the Recipient within 45 business days from the Site Visit: Exit Conference date"
+      }
+    ],
+    "organization_description": "The Norwalk Transit District (NTD) was established in 1974 as a municipal agency to provide public transportation services in the City of Norwalk and surrounding areas. NTD operates fixed-route bus service with 11 routes and complementary ADA paratransit service. The agency is governed by a seven-member Commission appointed by the Mayor. NTD employs approximately 85 full-time and part-time staff. Transit operations are managed directly by NTD staff. The agency maintains a fleet of 32 buses and 8 paratransit vehicles housed at the main facility on East Avenue.",
+    "awards": [
+      {
+        "award_number": "CT-2021-001-00",
+        "award_amount": "$2,450,000",
+        "year_executed": "2021",
+        "description": "Section 5307 Urbanized Area Formula Program - Operating and Capital"
+      },
+      {
+        "award_number": "CT-2022-001-00",
+        "award_amount": "$2,580,000",
+        "year_executed": "2022",
+        "description": "Section 5307 Urbanized Area Formula Program - Operating and Capital"
+      },
+      {
+        "award_number": "CT-2020-015-00",
+        "award_amount": "$1,250,000",
+        "year_executed": "2020",
+        "description": "Section 5339 Bus and Bus Facilities Program - Fleet Replacement"
+      }
+    ],
+    "supplemental_awards": "CT-2020-002-00",
+    "projects_completed": [
+      "Fuel Island Replacement and Service Lane Improvements (2022) - Replaced aging fuel dispensing system and upgraded service lanes to improve operational efficiency",
+      "Bus Fleet Replacement (2021) - Purchased and deployed 8 new 40-foot low-floor buses to replace vehicles that exceeded useful life"
+    ],
+    "projects_ongoing": [
+      "Facility HVAC Upgrade - Modernizing heating and cooling systems at the main maintenance facility to improve energy efficiency and air quality",
+      "Real-Time Passenger Information System - Installing GPS-based systems on all buses to provide real-time arrival information to passengers via mobile app and digital signs"
+    ],
+    "projects_future": [
+      "Main Facility Expansion - Planning a 15,000 square foot addition to the maintenance facility to accommodate growing fleet and provide additional indoor storage",
+      "Electric Bus Transition Study - Conducting feasibility study for transitioning to electric buses, including infrastructure requirements and cost analysis",
+      "Mobile Fare Payment System - Implementing contactless payment options including credit/debit cards and mobile wallet applications"
+    ]
+  },
+
+  "fta_program_manager": {
+    "name": "Michelle Muhlanger",
+    "title": "Deputy Regional Administrator",
+    "phone": "617-494-2630",
+    "email": "michelle.muhlanger@dot.gov",
+    "region": "Region 1"
+  },
+
+  "regional_officer": {
+    "name": "Mary Beth Mello",
+    "title": "Regional Administrator"
+  },
+
+  "contractor": {
+    "name": "Qi Tech, LLC",
+    "lead_reviewer_name": "Gwen Larson",
+    "lead_reviewer_phone": "920-746-4595",
+    "lead_reviewer_email": "gwen_larson@qitechllc.com"
+  },
+
+  "assessments": [
+    {
+      "review_area": "Legal",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Financial Management and Capacity",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Technical Capacity – Award Management",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Technical Capacity – Program Management & Subrecipient Oversight",
+      "finding": "NA",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Technical Capacity – Project Management",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Transit Asset Management",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Satisfactory Continuing Control",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Maintenance",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Procurement",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Disadvantaged Business Enterprise (DBE)",
+      "finding": "D",
+      "deficiency_code": "DBE12-2",
+      "description": "Insufficient documentation of monitoring DBE work. Per 49 CFR 26.37(b), a recipient's DBE program must include a monitoring and enforcement mechanism to ensure that work committed to DBEs at contract award is actually performed by the DBEs to which the work was committed. NTD implemented a project during the review period to replace the fuel tank, construct a new fuel island, and to make service lane improvements, which included work completed by a DBE. However, since the DBE Liaison Officer was out on an extended medical leave during this project's completion, it was not monitored for DBE participation.",
+      "corrective_action": "By December 31, 2023, NTD must submit to the FTA Office of Civil Rights (TCR) evidence that it has implemented its DBE monitoring process to ensure that DBEs are actually performing the stated work.",
+      "due_date": "2023-12-31",
+      "date_closed": null
+    },
+    {
+      "review_area": "Title VI",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Americans with Disabilities Act (ADA) – General",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "ADA – Complementary Paratransit",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Equal Employment Opportunity",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "School Bus",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Charter Bus",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Drug Free Workplace Act",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Drug and Alcohol Program",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Section 5307 Program Requirements",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Section 5310 Program Requirements",
+      "finding": "NA",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Section 5311 Program Requirements",
+      "finding": "NA",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Public Transportation Agency Safety Plan (PTASP)",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Cybersecurity",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    }
+  ],
+
+  "erf_items": [],
+
+  "subrecipients_5307": [],
+
+  "subrecipients_5310": [],
+
+  "subrecipients_5311": [],
+
+  "contractors": [],
+
+  "attendees": {
+    "recipient": [
+      {
+        "name": "David Suarez",
+        "title": "General Manager",
+        "phone": "203-852-0000",
+        "email": "dsuarez@norwalktransit.com"
+      },
+      {
+        "name": "Sarah Johnson",
+        "title": "Operations Manager",
+        "phone": "203-852-0001",
+        "email": "sjohnson@norwalktransit.com"
+      },
+      {
+        "name": "Michael Chen",
+        "title": "Finance Director",
+        "phone": "203-852-0002",
+        "email": "mchen@norwalktransit.com"
+      }
+    ],
+    "subrecipients": [],
+    "contractors_lessees": [],
+    "fta": [
+      {
+        "name": "Michelle Muhlanger",
+        "title": "Deputy Regional Administrator",
+        "phone": "617-494-2630",
+        "email": "michelle.muhlanger@dot.gov"
+      },
+      {
+        "name": "James Rodriguez",
+        "title": "Transportation Program Specialist",
+        "phone": "617-494-2631",
+        "email": "james.rodriguez@dot.gov"
+      },
+      {
+        "name": "Emily Wang",
+        "title": "Civil Rights Officer",
+        "phone": "617-494-2632",
+        "email": "emily.wang@dot.gov"
+      }
+    ],
+    "contractor": [
+      {
+        "name": "Gwen Larson",
+        "title": "Lead Reviewer",
+        "phone": "920-746-4595",
+        "email": "gwen_larson@qitechllc.com"
+      },
+      {
+        "name": "Robert Martinez",
+        "title": "Senior Compliance Analyst",
+        "phone": "920-746-4596",
+        "email": "rmartinez@qitechllc.com"
+      }
+    ]
+  },
+
+  "metadata": {
+    "has_deficiencies": true,
+    "deficiency_count": 1,
+    "deficiency_areas": "Disadvantaged Business Enterprise",
+    "erf_count": 0,
+    "erf_areas": "",
+    "has_post_visit_responses": false,
+    "covid19_context": true,
+    "first_time_operating_assistance": true,
+    "no_repeat_deficiencies": true,
+    "repeat_deficiency_count": 0,
+    "repeat_deficiency_areas": ""
+  }
+}

@@ -28,6 +28,14 @@ class Settings(BaseSettings):
         default="https://api.riskuity.com/v1",
         description="Base URL for Riskuity API"
     )
+    riskuity_timeout: int = Field(
+        default=10,
+        description="Riskuity API request timeout in seconds"
+    )
+    riskuity_max_retries: int = Field(
+        default=3,
+        description="Maximum number of retry attempts for Riskuity API calls"
+    )
 
     # AWS Configuration
     s3_bucket_name: str = Field(
@@ -35,8 +43,16 @@ class Settings(BaseSettings):
         description="S3 bucket name for document storage"
     )
     aws_region: str = Field(
-        default="us-east-1",
-        description="AWS region for S3 and other services"
+        default="us-gov-west-1",
+        description="AWS region for S3 and other services (GovCloud)"
+    )
+    s3_presigned_url_expiration: int = Field(
+        default=86400,
+        description="Pre-signed URL expiration time in seconds (default: 24 hours)"
+    )
+    s3_json_cache_ttl_hours: int = Field(
+        default=1,
+        description="JSON data cache TTL in hours (default: 1 hour)"
     )
 
     # Application Configuration
@@ -71,6 +87,15 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore"
     )
+
+    # Uppercase aliases for convenience
+    @property
+    def RISKUITY_API_KEY(self) -> str:
+        return self.riskuity_api_key
+
+    @property
+    def RISKUITY_API_BASE_URL(self) -> str:
+        return self.riskuity_base_url
 
 
 # Global settings instance

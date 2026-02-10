@@ -1,0 +1,284 @@
+{
+  "project_id": "DRPA-FY2023-TR-1413",
+  "generated_at": "2025-11-19T16:00:00Z",
+  "data_version": "1.0",
+
+  "project": {
+    "recipient_name": "Delaware River Port Authority",
+    "recipient_acronym": "DRPA",
+    "recipient_id": "1413",
+    "recipient_city_state": "Camden, New Jersey",
+    "recipient_website": null,
+    "region_number": 3,
+    "review_type": "Triennial Review",
+    "fiscal_year": 2023,
+    "scoping_meeting_date": "2023-03-01",
+    "site_visit_start_date": "2023-06-20",
+    "site_visit_end_date": "2023-06-28",
+    "exit_conference_date": "2023-06-28",
+    "exit_conference_format": "virtual",
+    "report_date": "2023-08-30"
+  },
+
+  "fta_program_manager": {
+    "name": "Tony Tarone",
+    "title": "Deputy Regional Administrator",
+    "phone": "215-656-7100",
+    "email": "tony.tarone@dot.gov",
+    "region": "Region 3"
+  },
+
+  "regional_officer": {
+    "name": "Monica Backmon",
+    "title": "Regional Administrator"
+  },
+
+  "contractor": {
+    "name": "Calyptus Consulting Group, Inc.",
+    "lead_reviewer_name": "Ellen Harvey",
+    "lead_reviewer_phone": null,
+    "lead_reviewer_email": null
+  },
+
+  "assessments": [
+    {
+      "review_area": "Legal",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Financial Management and Capacity",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Technical Capacity – Award Management",
+      "finding": "D",
+      "deficiency_code": "TC-AM5-1",
+      "description": "Inactive award/untimely closeouts. DRPA has 11 inactive grants and 5 awards on the closeout list. Award closeout retainage issues identified. DRPA does not initiate closeout within 120 days once activity is completed.",
+      "corrective_action": "By October 30, 2023, submit more effective procedures for award management to enable award closeout and submit an award closeout plan for all awards.",
+      "due_date": "2023-10-30",
+      "date_closed": "2023-08-23"
+    },
+    {
+      "review_area": "Technical Capacity – Program Management & Subrecipient Oversight",
+      "finding": "NA",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Technical Capacity – Project Management",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Transit Asset Management",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Satisfactory Continuing Control",
+      "finding": "D",
+      "deficiency_code": "SCC8-4",
+      "description": "No evidence of physical inventory or reconciliation. SAP asset listing includes individual assets and project-level line items, but departments maintain separate inventories. Physical inventory memo developed by PATCO is at project and award-level only, does not provide details at asset level to conduct reconciliation with SAP assets. No documentation of reconciliation between list of assets in SAP and physical assets.",
+      "corrective_action": "By October 30, 2023, submit written inventory control procedures defining roles and responsibilities for tracking FTA-funded assets and reconciling physical inventories to equipment records, and submit a timeline for performing the physical inventory and reconciliation of FTA-funded equipment.",
+      "due_date": "2023-10-30",
+      "date_closed": "2023-08-07"
+    },
+    {
+      "review_area": "Maintenance",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Procurement",
+      "finding": "D",
+      "deficiency_code": "P11-1",
+      "description": "Missing FTA Clauses. DRPA procurement files do not include: (1) Notice to FTA and U.S. DOT Inspector General of information related to fraud, waste, abuse, or other legal matters; (2) Prohibition on certain telecommunications and video surveillance services or equipment; (3) Seatbelt use per FTA Master Agreement Section 34(a); (4) Distracted driving per FTA Master Agreement Section 34(a).",
+      "corrective_action": "By October 30, 2023, submit revised procurement procedures that address inclusion of all FTA-required third-party contract clauses through use of a clause checklist or other mechanism, submit a procedure for updating the required contract clauses on an annual basis. By December 11, 2023, submit evidence of implementation with the next applicable procurement.",
+      "due_date": "2023-12-11",
+      "date_closed": "2023-08-07"
+    },
+    {
+      "review_area": "Disadvantaged Business Enterprise (DBE)",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Title VI",
+      "finding": "D",
+      "deficiency_code": "TVI2-1",
+      "description": "Language Assistance Plan implementation deficiencies. DRPA Language Assistance Plan notes that training is provided on policies and procedures concerning language assistance and ways to determine whether an individual needs assistance services through new employee orientation process. DRPA is not providing this training during orientation. Title VI Training not conducted with new hire orientation or on language line per Title VI Program LAP.",
+      "corrective_action": "By October 30, 2023, prepare and submit to FTA Office of Civil Rights documentation of implementing its LAP, including the completion of required training.",
+      "due_date": "2023-10-30",
+      "date_closed": "2023-08-22"
+    },
+    {
+      "review_area": "Americans with Disabilities Act (ADA) – General",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "ADA – Complementary Paratransit",
+      "finding": "NA",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Equal Employment Opportunity",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "School Bus",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Charter Bus",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Drug Free Workplace Act",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Drug and Alcohol Program",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Section 5307 Program Requirements",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Section 5310 Program Requirements",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Section 5311 Program Requirements",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Public Transportation Agency Safety Plan (PTASP)",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Cybersecurity",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    }
+  ],
+
+  "erf_items": [],
+
+  "subrecipient": {
+    "reviewed": false,
+    "name": null,
+    "city_state": null,
+    "program_section": null
+  },
+
+  "attendees": {
+    "recipient": [],
+    "subrecipients": [],
+    "contractors_lessees": [],
+    "fta": [],
+    "contractor": []
+  },
+
+  "metadata": {
+    "has_deficiencies": true,
+    "deficiency_count": 4,
+    "deficiency_areas": "Award Management, Satisfactory Continuing Control, Procurement, and Title VI",
+    "erf_count": 0,
+    "erf_areas": "",
+    "covid19_context": true,
+    "first_time_operating_assistance": true,
+    "no_repeat_deficiencies": true,
+    "deficiencies_closed_count": 4,
+    "deficiencies_open_count": 0,
+    "service_type": "High-speed rail (PATCO)",
+    "governance": "Bi-state federally chartered agency"
+  }
+}

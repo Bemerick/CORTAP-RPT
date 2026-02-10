@@ -1,0 +1,282 @@
+{
+  "project_id": "GPTD-FY2023-TR-1348",
+  "generated_at": "2025-11-19T16:00:00Z",
+  "data_version": "1.0",
+
+  "project": {
+    "recipient_name": "Greater Portland Transit District",
+    "recipient_acronym": "GPTD",
+    "recipient_id": "1348",
+    "recipient_city_state": "Portland, Maine",
+    "recipient_website": null,
+    "region_number": 1,
+    "review_type": "Triennial Review",
+    "fiscal_year": 2023,
+    "scoping_meeting_date": "2023-02-24",
+    "site_visit_start_date": "2023-03-28",
+    "site_visit_end_date": "2023-05-09",
+    "exit_conference_date": "2023-05-09",
+    "exit_conference_format": "virtual",
+    "report_date": "2023-07-11"
+  },
+
+  "fta_program_manager": {
+    "name": "Peter Butler",
+    "title": "Regional Administrator",
+    "phone": "617-494-2729",
+    "email": "peter.butler@dot.gov",
+    "region": "Region 1"
+  },
+
+  "regional_officer": {
+    "name": "Gina Filosa",
+    "title": "Regional Administrator"
+  },
+
+  "contractor": {
+    "name": "Advanced Systems Technology & Management, Inc. under subcontract to Qi Tech, LLC",
+    "lead_reviewer_name": "Keith Carlson",
+    "lead_reviewer_phone": "608-780-8141",
+    "lead_reviewer_email": "keith.carlson@adstm.com"
+  },
+
+  "assessments": [
+    {
+      "review_area": "Legal",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Financial Management and Capacity",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Technical Capacity – Award Management",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Technical Capacity – Program Management & Subrecipient Oversight",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Technical Capacity – Project Management",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Transit Asset Management",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Satisfactory Continuing Control",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Maintenance",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Procurement",
+      "finding": "D",
+      "deficiency_code": "P11-1",
+      "description": "Missing FTA clauses. In the purchase of New Flyer buses awarded March 31, 2022, the required clause regarding prohibition of certain telecommunications and video surveillance services or equipment (2 CFR 200.216, effective August 13, 2020) was missing.",
+      "corrective_action": "By November 30, 2023, GPTD must submit revised procurement procedures with clause checklist and demonstrate implementation.",
+      "due_date": "2023-11-30",
+      "date_closed": "2023-06-26"
+    },
+    {
+      "review_area": "Disadvantaged Business Enterprise (DBE)",
+      "finding": "D",
+      "deficiency_code": "DBE5-1",
+      "description": "DBE uniform reports contain inaccuracies. GPTD incorrectly reported revenue contract funds (30% retained by DBE advertising firm from revenue-sharing agreement) as DBE awards/payments in semi-annual reports. Revenue contracts cannot be counted toward DBE attainment.",
+      "corrective_action": "By November 30, 2023, GPTD must submit corrected DBE Uniform Reports for 2020-2022, procedures for correctly completing reports, and new DBE goal with revised methodology.",
+      "due_date": "2023-11-30",
+      "date_closed": "2023-06-28"
+    },
+    {
+      "review_area": "Title VI",
+      "finding": "D",
+      "deficiency_code": "TVI4-1",
+      "description": "Title VI complaint process not implemented in accordance with Title VI Program. Per 49 CFR Section 21.9(b), recipients must develop procedures for investigating and tracking Title VI complaints. GPTD's Title VI Plan states investigations will be completed within 60 days, but four complaints received in 2022 were not resolved within this timeframe.",
+      "corrective_action": "By December 31, 2023, GPTD must submit evidence of complaint processing per Title VI Program. By August 31, 2023, GPTD must submit revised Title VI Program correctly describing complaint process.",
+      "due_date": "2023-12-31",
+      "date_closed": null
+    },
+    {
+      "review_area": "Americans with Disabilities Act (ADA) – General",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "ADA – Complementary Paratransit",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Equal Employment Opportunity",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "School Bus",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Charter Bus",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Drug Free Workplace Act",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Drug and Alcohol Program",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Section 5307 Program Requirements",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Section 5310 Program Requirements",
+      "finding": "NA",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Section 5311 Program Requirements",
+      "finding": "NA",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Public Transportation Agency Safety Plan (PTASP)",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Cybersecurity",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    }
+  ],
+
+  "erf_items": [],
+
+  "subrecipient": {
+    "reviewed": true,
+    "name": "Regional Transportation Program, Inc. (RTP)",
+    "city_state": "Portland, Maine",
+    "program_section": "5307",
+    "service": "ADA complementary paratransit (contracted)"
+  },
+
+  "attendees": {
+    "recipient": [],
+    "subrecipients": [],
+    "contractors_lessees": [],
+    "fta": [],
+    "contractor": []
+  },
+
+  "metadata": {
+    "has_deficiencies": true,
+    "deficiency_count": 3,
+    "deficiency_areas": "Procurement, Disadvantaged Business Enterprise, and Title VI",
+    "erf_count": 0,
+    "erf_areas": "",
+    "covid19_context": true,
+    "no_repeat_deficiencies": true,
+    "deficiencies_closed_count": 2,
+    "deficiencies_open_count": 1
+  }
+}

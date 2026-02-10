@@ -43,5 +43,5 @@ workflow_status:
   solutioning-gate-check: docs/implementation-readiness-report-2025-11-12.md  # agent: architect
 
   # Phase 3: Implementation
-  epic-breakdown: docs/epics.md  # 9 epics, 43 stories (2025-11-13)
-  sprint-planning: required  # agent: sm
+  epic-breakdown: docs/epics.md  # 11 epics, 62 stories (updated 2025-12-03)
+  sprint-planning: .bmad-ephemeral/sprint-status.yaml  # agent: sm

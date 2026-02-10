@@ -673,35 +673,39 @@ CORTAP-RPT will use a **data service layer** that fetches Riskuity data once, tr
 
 **Total: 9 Epics, 43 Stories, ~7-8 weeks**
 
+**SEQUENCE UPDATED 2025-11-19:** Epic 4 prioritized before Epic 3.5 to validate end-to-end document generation with mock JSON files before building Riskuity integration.
+
 1. **Epic 1: Foundation & Template Engine** (1-2 weeks) - 6 stories - ✅ IN PROGRESS
-   - Stories: 1.1 (complete), 1.2-1.6 (pending)
+   - Stories: 1.1 (review), 1.2-1.6 (pending)
    - Establishes FastAPI, logging, exceptions, POC validation, DocumentGenerator, grammar helpers
    - No Riskuity dependencies - can proceed immediately
 
-2. **Epic 3.5: Project Data Service** (1 week) - 7 stories - 🆕 NEW
-   - 3.5.1: Design canonical JSON schema
+2. **Epic 4: Recipient Information Request Template** (1 week) - 6 stories - 🎯 PRIORITIZED
+   - 4.1: Convert RIR template to docxtpl format (15 fields)
+   - 4.2: Implement review type conditional logic (CL-RIR-1)
+   - 4.3: Create RIRTemplateData model and context builder
+   - 4.4: Integrate RIR with JSON files (mock data → template)
+   - 4.5: Add RIR to document generation API
+   - 4.6: End-to-end testing with 3 mock JSON files
+   - **Dependency:** Epic 1 complete, Story 3.5.1 (schema) complete ✅
+   - **Strategic Value:** Validates end-to-end architecture with visible deliverables (real RIR documents)
+   - **Uses:** Canonical JSON schema v1.0 + 3 mock data files from completed Story 3.5.1
+
+3. **Epic 3.5: Project Data Service** (1 week) - 7 stories - 🔄 DEFERRED
+   - 3.5.1: Design canonical JSON schema ✅ COMPLETED
    - 3.5.2: Riskuity API client with retry logic (4 endpoints)
    - 3.5.3: Data transformer (Riskuity → JSON)
    - 3.5.4: S3 storage for JSON data files
    - 3.5.5: Caching and TTL logic (1-hour cache)
    - 3.5.6: Data validation and completeness checks
    - 3.5.7: POST `/api/v1/projects/{id}/data` endpoint
-   - **Dependency:** Epic 1 complete; Riskuity API access (can use mocks initially)
-
-3. **Epic 4: Recipient Information Request Template** (1 week) - 6 stories - 🆕 NEW
-   - 4.1: Convert RIR template to docxtpl format (15 fields)
-   - 4.2: Implement review type conditional logic (CL-RIR-1)
-   - 4.3: Create RIRTemplateData model and context builder
-   - 4.4: Integrate RIR with data service (JSON → template)
-   - 4.5: Add RIR to document generation API
-   - 4.6: End-to-end testing with realistic data
-   - **Dependency:** Epic 3.5 complete
-   - **Strategic Value:** Validates data service architecture with simple template
+   - **Dependency:** Epic 4 complete (validates schema works for templates)
+   - **Strategic Value:** Replaces mock JSON files with live Riskuity data
 
 4. **Epic 2: Conditional Logic Engine** (1.5 weeks) - 8 stories - 🔄 DEFERRED
    - All 9 complex patterns for Draft Audit Report
    - Benefits from architectural lessons learned in Epic 4
-   - **Dependency:** Epic 3.5 complete, Epic 4 recommended, Riskuity fields verified
+   - **Dependency:** Epic 3.5 complete, Epic 4 complete, Riskuity fields verified
 
 5. **Epic 5: Validation Engine** (0.5 weeks) - 3 stories (renumbered from Epic 4)
    - Template field metadata, Validator service, integration

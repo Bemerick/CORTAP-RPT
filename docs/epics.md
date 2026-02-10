@@ -16,6 +16,540 @@ This document decomposes the CORTAP-RPT PRD into 7 implementation epics with bit
 
 ---
 
+## Epic 0: Multi-Tenant Foundation
+
+**Epic Goal:** Establish multi-tenant architecture with strict data isolation, enabling CORTAP-RPT to serve multiple Riskuity tenant instances (contractors) from a single shared service deployment.
+
+**Business Value:** Enables FTA to onboard multiple contractors using Riskuity + CORTAP-RPT with guaranteed data isolation, operational simplicity (single deployment), and compliance guarantees.
+
+**Architectural Components:**
+- `lambda/authorizer.py` (API Gateway Lambda Authorizer)
+- `app/services/tenant_service.py` (Tenant configuration management)
+- `app/models/tenant.py` (TenantContext Pydantic model)
+- `scripts/provision_tenant.py` (Admin provisioning tool)
+- DynamoDB table: `cortap-tenant-config`
+- AWS Secrets Manager integration
+- Updated SAM template with authorizer + DynamoDB
+
+**Dependencies:** Can be implemented in parallel with Epic 1, or before it. All subsequent epics depend on this.
+
+**Reference:** See `docs/architecture.md` - Multi-Tenant Integration Architecture section
+
+---
+
+### Story 0.1: Create DynamoDB Tenant Configuration Table
+
+As a DevOps engineer,
+I want a DynamoDB table to store tenant configuration,
+So that API Gateway can validate API keys and identify tenants for each request.
+
+**Acceptance Criteria:**
+
+**Given** I have AWS credentials configured
+**When** I create the `cortap-tenant-config` DynamoDB table
+**Then** The table is created with:
+
+**Table Schema:**
+- **Primary Key:** `api_key_hash` (String) - SHA256 hash of API key
+- **Attributes:**
+  - `tenant_id` (String) - e.g., "fta-contractor-a"
+  - `tenant_name` (String) - e.g., "FTA Contractor A Reviews"
+  - `riskuity_instance_url` (String) - e.g., "https://fta-contractor-a.riskuity.aws.com/api/v1"
+  - `riskuity_api_key_arn` (String) - ARN to Secrets Manager secret
+  - `s3_prefix` (String) - e.g., "fta-contractor-a/"
+  - `enabled` (Boolean) - Tenant active/inactive flag
+  - `created_at` (String) - ISO 8601 timestamp
+  - `updated_at` (String) - ISO 8601 timestamp
+
+**And** Billing mode is `PAY_PER_REQUEST` (on-demand)
+**And** Table is created in `us-east-1` (or configured AWS region)
+
+**Prerequisites:** None - foundational story
+
+**Technical Notes:**
+- Can be created via AWS Console, AWS CLI, or SAM template
+- For MVP, manual creation is acceptable; SAM template recommended for repeatability
+- Add to `infra/template.yaml` as CloudFormation resource
+- No GSI needed for MVP (single-key lookup by api_key_hash)
+- Consider adding TTL attribute for future auto-expiration of tenants
+
+**SAM Template Example:**
+```yaml
+Resources:
+  TenantConfigTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: cortap-tenant-config
+      AttributeDefinitions:
+        - AttributeName: api_key_hash
+          AttributeType: S
+      KeySchema:
+        - AttributeName: api_key_hash
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+```
+
+---
+
+### Story 0.2: Implement Lambda Authorizer for API Key Validation
+
+As a security engineer,
+I want an API Gateway Lambda Authorizer that validates API keys and injects tenant context,
+So that every API request is authenticated and scoped to the correct tenant.
+
+**Acceptance Criteria:**
+
+**Given** The DynamoDB `cortap-tenant-config` table exists
+**When** I implement `lambda/authorizer.py`
+**Then** The Lambda function performs the following:
+
+1. **Extract API Key:**
+   - Read `x-api-key` from request headers (or `Authorization: Bearer <key>`)
+   - Return "Unauthorized" if missing
+
+2. **Validate API Key:**
+   - Compute SHA256 hash of API key
+   - Query DynamoDB using `api_key_hash` as key
+   - Return "Unauthorized" if key not found
+   - Return "Unauthorized" if `enabled = false`
+
+3. **Inject Tenant Context:**
+   - Return IAM policy allowing API invocation
+   - Include tenant context in `context` field:
+     - `tenant_id`
+     - `tenant_name`
+
+4. **Return Authorization Response:**
+```python
+{
+    'principalId': tenant_id,
+    'policyDocument': {
+        'Version': '2012-10-17',
+        'Statement': [{
+            'Action': 'execute-api:Invoke',
+            'Effect': 'Allow',
+            'Resource': event['methodArn']
+        }]
+    },
+    'context': {
+        'tenant_id': tenant_id,
+        'tenant_name': tenant_name
+    }
+}
+```
+
+**And** The Lambda has IAM permissions to read from DynamoDB table
+**And** The function logs all authorization attempts (success/failure) with tenant_id
+**And** Unit tests cover:
+- Valid API key → successful authorization
+- Invalid API key → unauthorized
+- Missing API key → unauthorized
+- Disabled tenant → unauthorized
+
+**Prerequisites:** Story 0.1 (DynamoDB table exists)
+
+**Technical Notes:**
+- Use Python 3.11 runtime (same as main Lambda)
+- Keep authorizer lightweight (< 100ms response time)
+- Use boto3 DynamoDB client: `dynamodb.Table('cortap-tenant-config').get_item(...)`
+- Cache DynamoDB client as global variable (Lambda warm start optimization)
+- Never log API keys (log hashes only for debugging)
+- Follow architecture.md Multi-Tenant Integration (authorizer code example)
+
+**Lambda Configuration:**
+- Memory: 256 MB
+- Timeout: 10 seconds
+- Environment variables: `TENANT_CONFIG_TABLE_NAME=cortap-tenant-config`
+
+---
+
+### Story 0.3: Create Tenant Context Model and Service
+
+As a developer,
+I want a TenantContext Pydantic model and TenantService to load tenant configuration,
+So that all services can access tenant-specific settings in a type-safe manner.
+
+**Acceptance Criteria:**
+
+**Given** The DynamoDB table and Lambda Authorizer exist
+**When** I implement `app/models/tenant.py` and `app/services/tenant_service.py`
+**Then** The following are created:
+
+**1. TenantContext Model (`app/models/tenant.py`):**
+```python
+from pydantic import BaseModel
+from typing import Optional
+
+class TenantContext(BaseModel):
+    tenant_id: str
+    tenant_name: str
+    riskuity_instance_url: str
+    riskuity_api_key: str  # Decrypted from Secrets Manager
+    s3_prefix: str
+    enabled: bool
+```
+
+**2. TenantService (`app/services/tenant_service.py`):**
+```python
+class TenantService:
+    async def get_tenant_config(self, tenant_id: str) -> TenantContext:
+        """Load tenant configuration from DynamoDB and Secrets Manager"""
+        # 1. Query DynamoDB by tenant_id (requires GSI or scan - see note)
+        # 2. Load Riskuity API key from Secrets Manager using ARN
+        # 3. Return TenantContext
+```
+
+**And** The service includes:
+- Async methods for loading tenant config
+- Caching of tenant configs (in-memory for Lambda warm start)
+- Error handling for missing tenant_id
+- Integration with AWS Secrets Manager to decrypt Riskuity API keys
+
+**And** Unit tests cover:
+- Loading valid tenant config
+- Handling missing tenant_id
+- Secrets Manager integration
+
+**Prerequisites:** Story 0.1 (DynamoDB), Story 0.2 (Authorizer)
+
+**Technical Notes:**
+- **IMPORTANT:** DynamoDB currently only has `api_key_hash` as primary key
+- To query by `tenant_id`, either:
+  - Option A: Add GSI with `tenant_id` as partition key (recommended)
+  - Option B: Store tenant configs in cache after authorizer lookup (simpler for MVP)
+- For MVP, recommend **Option B**: Authorizer loads config, passes to Lambda via context
+- Use boto3 Secrets Manager client: `secretsmanager.get_secret_value(SecretId=arn)`
+- Cache tenant configs in memory: `_tenant_cache: Dict[str, TenantContext] = {}`
+- TTL cache: Reload every 5 minutes (configurable)
+
+---
+
+### Story 0.4: Implement Tenant Context Dependency Injection
+
+As a developer,
+I want a FastAPI dependency that extracts tenant context from API Gateway authorizer,
+So that all API routes automatically receive tenant context without manual parsing.
+
+**Acceptance Criteria:**
+
+**Given** The TenantService and TenantContext model exist
+**When** I implement `app/api/dependencies.py`
+**Then** The `get_tenant_context()` dependency function is created:
+
+```python
+from fastapi import Request, HTTPException, Depends
+from app.models.tenant import TenantContext
+from app.services.tenant_service import TenantService
+
+async def get_tenant_context(request: Request) -> TenantContext:
+    """Extract tenant context from API Gateway authorizer"""
+    # 1. Extract tenant_id from request.scope['aws.event']['requestContext']['authorizer']
+    # 2. If missing, raise HTTPException 401 "Tenant context missing"
+    # 3. Load full tenant config via TenantService
+    # 4. Return TenantContext
+```
+
+**And** The dependency is used in API routes:
+```python
+@router.post("/api/v1/generate-document")
+async def generate_document(
+    request: GenerateDocumentRequest,
+    tenant: TenantContext = Depends(get_tenant_context)  # Injected
+):
+    # tenant.tenant_id, tenant.riskuity_instance_url available
+```
+
+**And** All API routes in Epic 6 use this dependency
+**And** Missing tenant context returns 401 Unauthorized
+**And** Disabled tenant returns 403 Forbidden
+
+**Prerequisites:** Story 0.3 (TenantContext model and service)
+
+**Technical Notes:**
+- Follow architecture.md Multi-Tenant Integration - Tenant Context Injection
+- Mangum (Lambda adapter) exposes API Gateway event in `request.scope['aws.event']`
+- For local development (not via API Gateway), provide fallback to env var: `DEFAULT_TENANT_ID`
+- Log tenant_id at start of every request for audit trail
+- This dependency runs on EVERY API request - keep it fast
+
+---
+
+### Story 0.5: Update S3Storage Service for Tenant Isolation
+
+As a developer,
+I want S3Storage service to enforce tenant-scoped S3 prefixes,
+So that no tenant can accidentally access another tenant's files.
+
+**Acceptance Criteria:**
+
+**Given** The TenantContext model exists
+**When** I implement or update `app/services/s3_storage.py`
+**Then** The S3Storage class constructor accepts `tenant_id`:
+
+```python
+class S3Storage:
+    def __init__(self, tenant_id: str, bucket_name: str):
+        self.s3_client = boto3.client('s3')
+        self.bucket_name = bucket_name
+        self.tenant_prefix = f"{tenant_id}/"  # CRITICAL: All paths prefixed
+
+    async def upload_document(self, project_id: str, filename: str, file_data: BinaryIO) -> str:
+        """Upload document with strict tenant isolation"""
+        s3_key = f"{self.tenant_prefix}documents/{project_id}/{filename}"
+        # Upload to s3_key
+        # Generate pre-signed URL for tenant-scoped key
+        return download_url
+
+    async def upload_data_json(self, project_id: str, json_data: dict) -> str:
+        """Upload project data JSON"""
+        s3_key = f"{self.tenant_prefix}data/{project_id}_project-data.json"
+        # Upload JSON
+        return s3_key
+
+    async def load_data_json(self, project_id: str) -> dict:
+        """Load project data JSON"""
+        s3_key = f"{self.tenant_prefix}data/{project_id}_project-data.json"
+        # Download and parse JSON
+        return data
+```
+
+**And** All S3 operations ALWAYS use `self.tenant_prefix`:
+- Document uploads: `{tenant_prefix}documents/{project_id}/{filename}`
+- JSON data: `{tenant_prefix}data/{project_id}_project-data.json`
+
+**And** There is NO code path that allows escaping tenant prefix
+**And** Unit tests verify:
+- Correct S3 key construction with tenant prefix
+- Pre-signed URLs include tenant prefix
+- Attempting to access key without prefix fails
+
+**Prerequisites:** Story 0.3 (TenantContext)
+
+**Technical Notes:**
+- Follow architecture.md Multi-Tenant Integration - S3 Prefix Enforcement
+- Constructor takes `tenant_id` from TenantContext in API routes
+- Use f-strings for key construction (explicit, auditable)
+- Pre-signed URLs automatically scoped to S3 key (which includes tenant prefix)
+- For local testing, use LocalStack or moto for S3 mocking
+
+**S3 Bucket Structure:**
+```
+s3://cortap-documents-prod/
+├── fta-contractor-a/
+│   ├── data/
+│   └── documents/
+├── fta-contractor-b/
+│   ├── data/
+│   └── documents/
+```
+
+---
+
+### Story 0.6: Update RiskuityClient for Tenant-Specific URLs
+
+As a developer,
+I want RiskuityClient to use tenant-specific Riskuity instance URLs and API keys,
+So that CORTAP-RPT can call back to the correct Riskuity tenant instance.
+
+**Acceptance Criteria:**
+
+**Given** TenantContext model includes `riskuity_instance_url` and `riskuity_api_key`
+**When** I implement or update `app/services/riskuity_client.py`
+**Then** The RiskuityClient constructor accepts TenantContext:
+
+```python
+class RiskuityClient:
+    def __init__(self, tenant_context: TenantContext):
+        self.tenant_id = tenant_context.tenant_id
+        self.base_url = tenant_context.riskuity_instance_url
+        self.api_key = tenant_context.riskuity_api_key
+        self.http_client = httpx.AsyncClient()
+
+    async def fetch_project(self, project_id: str) -> dict:
+        """Fetch project from tenant-specific Riskuity instance"""
+        url = f"{self.base_url}/projects/{project_id}"
+        headers = {
+            'Authorization': f'Bearer {self.api_key}',
+            'X-Tenant-ID': self.tenant_id  # For Riskuity's logging
+        }
+        response = await self.http_client.get(url, headers=headers)
+        response.raise_for_status()
+        return response.json()
+```
+
+**And** Each tenant's Riskuity instance has unique:
+- `base_url`: e.g., `https://fta-contractor-a.riskuity.aws.com/api/v1`
+- `api_key`: Stored encrypted in Secrets Manager
+
+**And** API calls include `X-Tenant-ID` header for Riskuity's audit logging
+**And** Unit tests use mocked httpx responses with different tenant URLs
+
+**Prerequisites:** Story 0.3 (TenantContext)
+
+**Technical Notes:**
+- This story can be deferred until Epic 3.5 (Riskuity API Integration) if needed
+- For now, just create the class structure accepting TenantContext
+- Full implementation in Epic 3.5 when Riskuity endpoints are defined
+- Use httpx AsyncClient for async support (replaces requests library)
+
+---
+
+### Story 0.7: Create Tenant Provisioning Script
+
+As a CORTAP-RPT admin,
+I want a CLI script to provision new tenants,
+So that onboarding new contractors takes 5 minutes instead of manual configuration.
+
+**Acceptance Criteria:**
+
+**Given** All tenant infrastructure (DynamoDB, Secrets Manager) exists
+**When** I run `python scripts/provision_tenant.py` with tenant details
+**Then** The script performs the following:
+
+**Script Usage:**
+```bash
+python scripts/provision_tenant.py \
+  --tenant-id fta-contractor-b \
+  --tenant-name "FTA Contractor B Reviews" \
+  --riskuity-url https://fta-contractor-b.riskuity.aws.com/api/v1 \
+  --riskuity-api-key <secret_key_from_riskuity_admin>
+```
+
+**Script Actions:**
+1. Generate new API key for Riskuity → CORTAP-RPT calls (UUID or secure random)
+2. Hash API key (SHA256) for storage in DynamoDB
+3. Store Riskuity API key in AWS Secrets Manager:
+   - Secret name: `cortap/tenants/{tenant_id}/riskuity_api_key`
+   - Encrypted at rest
+   - Return ARN
+4. Insert tenant record in DynamoDB:
+   - `api_key_hash`: SHA256(api_key)
+   - `tenant_id`, `tenant_name`, `riskuity_instance_url`
+   - `riskuity_api_key_arn`: ARN from Secrets Manager
+   - `s3_prefix`: `{tenant_id}/`
+   - `enabled`: true
+   - `created_at`: ISO 8601 timestamp
+5. Print generated API key for Riskuity Admin (ONLY TIME IT'S SHOWN)
+6. Print success message with next steps
+
+**And** Script validates:
+- Tenant ID doesn't already exist
+- Riskuity URL is valid format
+- AWS credentials are configured
+
+**And** Script output includes:
+```
+✅ Tenant provisioned successfully!
+
+Tenant ID: fta-contractor-b
+API Key: <generated_key>  ⚠️  SAVE THIS - IT WILL NOT BE SHOWN AGAIN
+
+Next steps:
+1. Provide API key to Riskuity Admin
+2. Riskuity Admin configures CORTAP integration with this key
+3. Test with: curl -X POST https://cortap-api.fta.gov/api/v1/generate-document -H "X-API-Key: <key>"
+```
+
+**Prerequisites:** Stories 0.1-0.6 (infrastructure exists)
+
+**Technical Notes:**
+- Use `argparse` for CLI arguments
+- Use `secrets` module for secure API key generation: `secrets.token_urlsafe(32)`
+- Use boto3 for DynamoDB and Secrets Manager
+- Include `--dry-run` flag for validation without making changes
+- Add `--delete-tenant` flag for removing tenants (soft delete: set `enabled=false`)
+- Store script in `scripts/provision_tenant.py`
+
+---
+
+### Story 0.8: Update SAM Template for Multi-Tenant Infrastructure
+
+As a DevOps engineer,
+I want the SAM template to include all multi-tenant infrastructure,
+So that deployments are repeatable and infrastructure is version-controlled.
+
+**Acceptance Criteria:**
+
+**Given** All multi-tenant components exist
+**When** I update `infra/template.yaml`
+**Then** The SAM template includes:
+
+**1. DynamoDB Table:**
+```yaml
+TenantConfigTable:
+  Type: AWS::DynamoDB::Table
+  Properties:
+    TableName: cortap-tenant-config
+    AttributeDefinitions:
+      - AttributeName: api_key_hash
+        AttributeType: S
+    KeySchema:
+      - AttributeName: api_key_hash
+        KeyType: HASH
+    BillingMode: PAY_PER_REQUEST
+```
+
+**2. Lambda Authorizer:**
+```yaml
+CORTAPAuthorizer:
+  Type: AWS::Serverless::Function
+  Properties:
+    Runtime: python3.11
+    Handler: authorizer.lambda_handler
+    CodeUri: lambda/
+    Timeout: 10
+    MemorySize: 256
+    Environment:
+      Variables:
+        TENANT_CONFIG_TABLE_NAME: !Ref TenantConfigTable
+    Policies:
+      - DynamoDBReadPolicy:
+          TableName: !Ref TenantConfigTable
+```
+
+**3. API Gateway with Authorizer:**
+```yaml
+CORTAPApi:
+  Type: AWS::Serverless::HttpApi
+  Properties:
+    Auth:
+      Authorizers:
+        LambdaAuthorizer:
+          FunctionArn: !GetAtt CORTAPAuthorizer.Arn
+          AuthorizerPayloadFormatVersion: 2.0
+          EnableSimpleResponses: false
+          Identity:
+            Headers:
+              - x-api-key
+```
+
+**4. Secrets Manager IAM Policy:**
+```yaml
+Policies:
+  - Statement:
+      Effect: Allow
+      Action: secretsmanager:GetSecretValue
+      Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:cortap/tenants/*"
+```
+
+**And** Main CORTAP Lambda has IAM permissions to:
+- Read from DynamoDB `cortap-tenant-config`
+- Read from Secrets Manager (tenant API keys)
+
+**And** `sam build` and `sam deploy` work without errors
+**And** Local testing works: `sam local start-api`
+
+**Prerequisites:** Stories 0.1-0.7 (all components implemented)
+
+**Technical Notes:**
+- SAM template is in `infra/template.yaml`
+- Use CloudFormation intrinsic functions: `!Ref`, `!GetAtt`, `!Sub`
+- Add outputs for DynamoDB table name, API Gateway URL
+- Include parameter for environment (dev, staging, prod)
+- Follow AWS SAM best practices for serverless applications
+
+---
+
 ## Epic 1: Foundation & Template Engine
 
 **Epic Goal:** Establish the FastAPI project foundation and implement core document generation capability with python-docxtpl, enabling basic merge field replacement and Word formatting preservation.
@@ -23,6 +557,8 @@ This document decomposes the CORTAP-RPT PRD into 7 implementation epics with bit
 **Business Value:** Creates the technical foundation for all subsequent development and proves that Word formatting can be preserved programmatically.
 
 **Architectural Components:** `app/main.py`, `app/config.py`, `services/document_generator.py`, `utils/grammar.py`, `templates/*.docx`
+
+**Dependencies:** Epic 0 (Multi-Tenant Foundation) should be complete or in parallel
 
 ---
 
@@ -148,38 +684,17 @@ So that we can provide meaningful error messages and proper HTTP status codes.
 
 ### Story 1.4: POC - Validate python-docxtpl with Draft Audit Report Template
 
-As a developer,
-I want to validate that python-docxtpl preserves Word formatting with the real Draft Audit Report template,
-So that we confirm the technical approach before full implementation.
-
-**Acceptance Criteria:**
-
-**Given** I have the Draft Audit Report template (.docx file)
-**When** I create a POC script using python-docxtpl
-**Then** The script successfully:
-- Loads the .docx template
-- Replaces simple merge fields (e.g., `{{ recipient_name }}`, `{{ review_type }}`)
-- Generates output .docx file
-
-**And** The generated document preserves:
-- All styles (fonts, colors, sizes)
-- Headers and footers
-- Page breaks
-- Table formatting
-- Paragraph formatting
-
-**And** Visual comparison shows no formatting differences
-**And** POC results are documented in `docs/poc-validation-report.md`
-
-**Prerequisites:** Story 1.1 (project structure, python-docxtpl installed)
-
-**Technical Notes:**
-- This is the Week 1 POC from PRD line 633
-- Use python-docxtpl `DocxTemplate` class
-- Test with minimal data (3-5 merge fields)
-- If formatting is not preserved, document issues and escalate
-- Place template in `app/templates/draft-audit-report.docx`
-- POC script can be standalone (`scripts/poc_docxtpl.py`) or test file
+> **✅ STORY ELIMINATED - Already Validated**
+>
+> This story is no longer needed. The RIR (Recipient Information Request) proof of concept already validated that python-docxtpl preserves Word formatting, handles merge fields correctly, and works with FTA templates.
+>
+> **Validation Results from RIR POC:**
+> - ✅ python-docxtpl successfully loads .docx templates
+> - ✅ Formatting preservation verified (fonts, colors, headers, footers, tables)
+> - ✅ Merge field replacement works correctly
+> - ✅ Generated documents match original template formatting
+>
+> **Next Step:** Proceed directly to Epic 1.5 (Draft Report Conditional Logic POC) to validate the 9 complex conditional patterns.
 
 ---
 
@@ -269,7 +784,482 @@ So that conditional logic can generate grammatically correct text.
 
 ---
 
+## Epic 1.5: Draft Report Conditional Logic POC
+
+**Epic Goal:** Validate that python-docxtpl can handle all 9 conditional logic patterns for the Draft Audit Report template using realistic data extracted from prior year reports, de-risking Epic 2 implementation.
+
+**Business Value:** Proves the technical approach works with real-world complexity before investing in full Epic 2 implementation. Identifies any Word formatting edge cases, required helper functions, and optimal template structure. Creates reusable mock JSON files as test fixtures for Epic 3.5.
+
+**Architectural Components:**
+- POC script: `scripts/poc_draft_report.py`
+- Mock data: `tests/fixtures/mock-data/*.json`
+- Converted template: `app/templates/draft-audit-report-poc.docx`
+- Validation report: `docs/poc-validation-report.md`
+
+**Dependencies:** None - RIR POC already validated python-docxtpl works
+
+**Note:** Story 1.4 (basic python-docxtpl validation) eliminated as redundant - RIR proof of concept already confirmed python-docxtpl preserves formatting and handles merge fields correctly.
+
+**Reference:** See `docs/draft-report-poc-plan.md` for detailed POC strategy
+
+---
+
+### Story 1.5.1: Extract and Document Form Fields from Draft Report Template
+
+As a developer,
+I want to extract and catalog all form fields and conditional logic markers from the Draft Audit Report template,
+So that I know the complete data model required for document generation.
+
+**Acceptance Criteria:**
+
+**Given** I have the Draft Audit Report template (`State_RO_Recipient# _Recipient Name_FY25_TRSMR_DraftFinalReport.docx`)
+**When** I analyze the template for merge fields and conditional markers
+**Then** I create a comprehensive field inventory document
+
+**And** The inventory includes for each field:
+- Field name (e.g., `[recipient_name]`, `[review_type]`)
+- Location in document (page number, section heading)
+- Field type (text, date, number, boolean, list, enum)
+- Required vs optional classification
+- Conditional logic pattern (which of FR-2.1 through FR-2.9)
+- Example value from prior year reports
+
+**And** The inventory is saved as `docs/draft-report-field-inventory.md` or spreadsheet
+
+**And** All 9 conditional logic patterns are identified:
+- FR-2.1: Review Type Routing
+- FR-2.2: Deficiency Detection & Alternative Content
+- FR-2.3: Conditional Section Inclusion
+- FR-2.4: Conditional Paragraph Selection
+- FR-2.5: Exit Conference Format Selection
+- FR-2.6: Deficiency Table Display
+- FR-2.7: Dynamic List Population
+- FR-2.8: Dynamic Counts
+- FR-2.9: Grammar Helpers
+
+**Prerequisites:** None - uses existing template from requirements
+
+**Technical Notes:**
+- Open Word document and use Find & Replace to search for `[` characters
+- Look for template instructions in red text or comments: `[For Triennial Reviews, delete...]`
+- Document `[OR]` blocks, `[ADD AS APPLICABLE]` sections, `[LIST]` markers
+- Count total unique merge fields (estimate: 50-70 fields)
+- Use table format for easy reference during template conversion
+
+**Deliverable:** Field inventory markdown/spreadsheet with ~50-70 documented fields
+
+---
+
+### Story 1.5.2: Map Conditional Logic Patterns to Template Sections
+
+As a developer,
+I want to map each of the 9 conditional logic patterns to specific template sections with Jinja2 translations,
+So that I know exactly how to convert the template to python-docxtpl format.
+
+**Acceptance Criteria:**
+
+**Given** The field inventory from Story 1.5.1 is complete
+**When** I analyze each conditional logic pattern occurrence in the template
+**Then** I create a pattern mapping document
+
+**And** For each pattern, the document includes:
+- Pattern ID and name (e.g., "FR-2.1: Review Type Routing")
+- Template location (page, section, paragraph)
+- Original template instruction text
+- Required data fields
+- Jinja2 translation/conversion
+- Test scenarios (e.g., "Triennial Review", "State Management Review", "Combined")
+
+**And** Special focus on complex patterns:
+- **Pattern 6 (Deficiency Table):** Document the 23-row table structure, conditional display logic, and partial column population rules
+- **Pattern 1 (Review Type):** Identify ALL locations where review type affects content (may be 10+ locations)
+- **Pattern 2 (Deficiency Detection):** Document all `[OR]` blocks
+
+**And** Create Jinja2 code snippets for each pattern as conversion reference
+
+**Prerequisites:** Story 1.5.1 (field inventory complete)
+
+**Technical Notes:**
+- Follow format in `docs/draft-report-poc-plan.md` Phase 1.2
+- Pattern 6 (table) is most complex - may need python-docxtpl table syntax research
+- Pattern 1 (review type) likely appears throughout document - find ALL instances
+- Create reusable Jinja2 snippets that can copy-paste into template
+
+**Deliverable:** Pattern mapping document saved as `docs/draft-report-pattern-mapping.md`
+
+---
+
+### Story 1.5.3: Extract Example Data from Prior Year Reports
+
+As a product owner,
+I want to extract realistic data from 2-3 completed prior year CORTAP reports,
+So that POC testing uses authentic scenarios that reflect real-world complexity.
+
+**Acceptance Criteria:**
+
+**Given** I have access to 2-3 completed FY23/FY24 CORTAP Final Reports
+**When** I extract data from each report using the data extraction template
+**Then** I create structured data sets for each report
+
+**And** The reports represent diverse scenarios:
+- **Report A:** Triennial Review, NO deficiencies, NO ERF, virtual exit conference
+- **Report B:** State Management Review, 3+ deficiencies, 2+ ERFs, in-person exit conference
+- **Report C:** Combined Review, 1-2 deficiencies, subrecipient reviewed, either format
+
+**And** For each report, extract:
+- Project metadata (recipient, region, dates, review type)
+- Audit team information (FTA PM, contractor lead)
+- All 23 review area findings (D/ND/NA) with deficiency details
+- ERF items (if applicable)
+- Subrecipient information (if applicable)
+- Derived fields (deficiency count, lists, booleans)
+
+**And** Data is documented in structured format (markdown or spreadsheet)
+**And** Data sets are saved in `docs/poc-data-sources/`
+
+**Prerequisites:** None - uses existing completed reports
+
+**Technical Notes:**
+- Ask FTA team for anonymized example reports (PDF or Word format)
+- Use data extraction template from `docs/draft-report-poc-plan.md` Phase 2.2
+- May need to manually transcribe from PDFs if data not in structured format
+- Ensure all 23 review areas are documented (even if just "ND")
+- Focus on diversity: different review types, deficiency patterns, ERF scenarios
+
+**Deliverable:**
+- 3 structured data extraction documents
+- Saved in `docs/poc-data-sources/`
+
+---
+
+### Story 1.5.4: Create Mock JSON Files from Extracted Data
+
+As a developer,
+I want to create mock JSON files based on the extracted prior year report data,
+So that I have realistic test data for POC document generation.
+
+**Acceptance Criteria:**
+
+**Given** I have extracted data from 3 prior year reports (Story 1.5.3)
+**When** I transform the data into JSON format following the canonical schema
+**Then** I create 3 mock JSON files
+
+**And** Files are named: `{recipient_acronym}_FY{year}_{review_type_abbrev}.json`
+- Example: `MBTA_FY24_TR.json` (Triennial Review)
+- Example: `DART_FY24_SMR.json` (State Management Review)
+- Example: `SEPTA_FY24_COMBINED.json` (Combined)
+
+**And** Each JSON file follows the canonical schema structure:
+- `project` object: recipient info, review type, dates
+- `fta_program_manager` object
+- `contractor` object
+- `assessments` array: 23 review areas with findings
+- `erf_items` array (if applicable)
+- `subrecipient` object
+- `metadata` object: derived fields (has_deficiencies, counts, lists)
+
+**And** All derived fields are correctly calculated:
+- `metadata.has_deficiencies` = true if any assessment.finding == "D"
+- `metadata.deficiency_count` = count of "D" findings
+- `metadata.deficiency_areas` = comma-separated list with "and" before last item
+- `metadata.erf_count` = count of erf_items
+- `metadata.erf_areas` = comma-separated ERF area list
+
+**And** Files are saved in `tests/fixtures/mock-data/`
+**And** JSON validates against schema (well-formed, no syntax errors)
+
+**Prerequisites:** Story 1.5.3 (data extraction complete)
+
+**Technical Notes:**
+- Follow JSON schema structure in `docs/draft-report-poc-plan.md` Phase 2.3
+- Use `jq` or online JSON validator to check syntax
+- Ensure dates are in ISO 8601 format: "2024-03-15"
+- For deficiency_areas list, use grammar helper format: "Legal, Financial Management, and Procurement"
+- These files will be reused in Epic 3.5 as integration test fixtures
+
+**Deliverable:**
+- 3 JSON files in `tests/fixtures/mock-data/`
+- Each ~200-300 lines representing complete CORTAP project data
+
+---
+
+### Story 1.5.5: Convert Draft Report Template to python-docxtpl Format
+
+As a developer,
+I want to convert the Draft Audit Report template to python-docxtpl Jinja2 format,
+So that it can be rendered with mock JSON data.
+
+**Acceptance Criteria:**
+
+**Given** I have the field inventory, pattern mapping, and mock JSON files
+**When** I convert the Word template to python-docxtpl format
+**Then** I create a new template file with Jinja2 syntax
+
+**And** All merge field conversions:
+- `[recipient_name]` → `{{ project.recipient_name }}`
+- `[review_type]` → `{{ project.review_type }}`
+- `[#]` → `{{ metadata.deficiency_count }}`
+- Follow JSON structure from mock files
+
+**And** All conditional logic patterns implemented:
+- **Pattern 1:** Review type routing with `{% if review_type == "Triennial Review" %}`
+- **Pattern 2:** Deficiency detection with `{% if metadata.has_deficiencies %}`
+- **Pattern 3:** Conditional sections with `{% if erf_count > 0 %}`
+- **Pattern 4:** Conditional paragraphs with `{% if reviewed_subrecipients %}`
+- **Pattern 5:** Exit format with `{% if exit_conference_format == "virtual" %}`
+- **Pattern 6:** Deficiency table with `{% if has_deficiencies %}` and `{% for assessment in assessments %}`
+- **Pattern 7:** Dynamic lists with `{{ metadata.deficiency_areas }}`
+- **Pattern 8:** Dynamic counts with `{{ metadata.erf_count if metadata.erf_count > 0 else 'no' }}`
+- **Pattern 9:** Grammar helpers with `{{ 'is' if count == 1 else 'are' }}`
+
+**And** Template preserves all original formatting:
+- Headers and footers
+- Page breaks
+- Table structure
+- Font styles (bold, italic, colors)
+- Paragraph spacing
+
+**And** Converted template saved as `app/templates/draft-audit-report-poc.docx`
+
+**Prerequisites:** Stories 1.5.1, 1.5.2, 1.5.4 (field inventory, pattern mapping, mock JSON)
+
+**Technical Notes:**
+- Make copy of original template first
+- Work section-by-section to avoid missing conversions
+- Test template loading in python-docxtpl before adding complex logic
+- For table syntax, see python-docxtpl documentation on table loops
+- May need to use `{%p ... %}` for paragraph-level logic vs `{% ... %}` for inline
+- Use `{%r ... %}` for repeating table rows
+- Keep template instructions as comments for reference
+
+**Deliverable:**
+- `app/templates/draft-audit-report-poc.docx` with Jinja2 syntax
+- All merge fields converted
+- All conditional patterns implemented
+
+---
+
+### Story 1.5.6: Implement POC Document Generation Script
+
+As a developer,
+I want a Python script that loads mock JSON and generates Word documents using the converted template,
+So that I can validate all conditional logic patterns work correctly.
+
+**Acceptance Criteria:**
+
+**Given** I have the converted template and 3 mock JSON files
+**When** I implement `scripts/poc_draft_report.py`
+**Then** The script performs the following:
+
+**Script functionality:**
+1. Load python-docxtpl template from `app/templates/draft-audit-report-poc.docx`
+2. Load mock JSON file from `tests/fixtures/mock-data/`
+3. Apply any data transformations (date formatting, etc.)
+4. Render template with JSON context
+5. Save output to `output/{recipient_acronym}_Draft_Report.docx`
+6. Print success message
+
+**And** The script accepts command-line arguments:
+```bash
+python scripts/poc_draft_report.py --input tests/fixtures/mock-data/MBTA_FY24_TR.json --output output/MBTA_Draft_Report.docx
+```
+
+**And** The script handles errors gracefully:
+- Missing template file
+- Invalid JSON syntax
+- Missing required fields in JSON
+- Template rendering errors
+
+**And** The script can process all 3 mock files in batch mode:
+```bash
+python scripts/poc_draft_report.py --batch
+```
+
+**And** Unit tests verify:
+- Template loading
+- JSON loading and parsing
+- Date formatting helpers
+- Error handling
+
+**Prerequisites:** Story 1.5.5 (template conversion complete)
+
+**Technical Notes:**
+- Follow POC script example in `docs/draft-report-poc-plan.md` Phase 4.1
+- Use `argparse` for CLI arguments
+- Use `pathlib.Path` for cross-platform file paths
+- Add helper function for date formatting: ISO → "March 15, 2024"
+- Print clear progress messages for batch mode
+- Save script in `scripts/poc_draft_report.py`
+
+**Deliverable:**
+- `scripts/poc_draft_report.py` with CLI interface
+- Generates 3 Word documents from mock JSON files
+- Output saved in `output/` directory
+
+---
+
+### Story 1.5.7: Validate All 9 Conditional Logic Patterns
+
+As a QA engineer,
+I want to validate that generated documents correctly implement all 9 conditional logic patterns,
+So that we confirm python-docxtpl can handle the Draft Report complexity.
+
+**Acceptance Criteria:**
+
+**Given** I have 3 generated Word documents from Story 1.5.6
+**When** I validate each document against the pattern validation checklist
+**Then** I verify all patterns work correctly
+
+**And** For each generated document, validate:
+
+**Formatting Preservation:**
+- [ ] Headers and footers match original template
+- [ ] Page breaks in correct locations
+- [ ] Table formatting preserved (borders, shading, column widths)
+- [ ] Font styles correct (bold, italic, colors, sizes)
+- [ ] Paragraph spacing matches original
+
+**Pattern 1: Review Type Routing**
+- [ ] Triennial Review shows only Triennial paragraphs
+- [ ] State Management shows only SMR paragraphs
+- [ ] Combined shows BOTH sets of paragraphs
+- [ ] All review type references throughout document are correct
+
+**Pattern 2: Deficiency Detection**
+- [ ] Document with deficiencies shows "Deficiencies were found..." text
+- [ ] Document without deficiencies shows "No deficiencies..." text
+- [ ] [OR] blocks display correct alternative in all locations
+
+**Pattern 3: Conditional Section Inclusion**
+- [ ] ERF section appears ONLY when erf_count > 0
+- [ ] ERF section completely omitted when erf_count = 0
+- [ ] Subrecipient section appears ONLY when reviewed = true
+
+**Pattern 4: Conditional Paragraph Selection**
+- [ ] Subrecipient paragraph appears only if reviewed_subrecipients = true
+- [ ] Paragraph completely omitted when false
+
+**Pattern 5: Exit Conference Format**
+- [ ] Virtual format uses virtual conference paragraph
+- [ ] In-person format uses in-person paragraph
+- [ ] No mixing of formats
+
+**Pattern 6: Deficiency Table**
+- [ ] Table appears ONLY if has_deficiencies = true
+- [ ] All 23 review areas listed in table
+- [ ] Detail columns (code, description, corrective action) populated ONLY for "D" rows
+- [ ] ND/NA rows have blank detail columns
+- [ ] Table formatting preserved (borders, headers)
+
+**Pattern 7: Dynamic Lists**
+- [ ] Deficiency areas list formatted: "Legal, Financial, and Procurement"
+- [ ] ERF areas list formatted correctly
+- [ ] "and" appears before last item
+- [ ] Single-item lists have no commas
+
+**Pattern 8: Dynamic Counts**
+- [ ] Numbers display when count > 0: "3 deficiencies"
+- [ ] "no" displays when count = 0: "no deficiencies"
+- [ ] Pluralization correct: "1 deficiency" vs "2 deficiencies"
+
+**Pattern 9: Grammar Helpers**
+- [ ] is/are correct: "1 area is" vs "3 areas are"
+- [ ] was/were correct based on count
+- [ ] a/an correct: "a review area" vs "an Enhanced Review Focus"
+
+**And** Document validation results in `docs/poc-validation-checklist.md`
+**And** Screenshots of generated vs original for comparison
+**And** Any issues or edge cases documented
+
+**Prerequisites:** Story 1.5.6 (POC script complete, documents generated)
+
+**Technical Notes:**
+- Use validation checklist from `docs/draft-report-poc-plan.md` Phase 4.2
+- Open generated documents side-by-side with original template
+- Use Word's "Compare Documents" feature to check formatting differences
+- Test edge cases: 0 deficiencies, 1 deficiency, many deficiencies
+- Focus on table formatting - most complex pattern
+- Document any python-docxtpl limitations discovered
+
+**Deliverable:**
+- Completed validation checklist saved as `docs/poc-validation-checklist.md`
+- Screenshots comparing generated vs original (saved in `docs/poc-screenshots/`)
+- List of any issues or edge cases requiring special handling
+
+---
+
+### Story 1.5.8: Document POC Results and Extract Lessons Learned
+
+As a product owner,
+I want a comprehensive POC validation report documenting results and lessons learned,
+So that Epic 2 implementation can proceed with validated approach and known constraints.
+
+**Acceptance Criteria:**
+
+**Given** All POC validation is complete (Story 1.5.7)
+**When** I create the POC validation report
+**Then** The report includes:
+
+**Summary Section:**
+- POC objective and approach
+- Mock data sources (which prior year reports used)
+- Number of patterns tested (9)
+- Overall success/failure determination
+
+**Results Section:**
+- Validation results for each of 9 patterns (pass/fail/partial)
+- Formatting preservation assessment
+- Screenshots comparing generated vs original documents
+- Any discrepancies or edge cases discovered
+
+**Technical Findings:**
+- Does python-docxtpl handle all 9 patterns correctly? (Yes/No + details)
+- Word formatting edge cases requiring special handling
+- Required helper functions (format_list, is_are, date formatting, etc.)
+- Template data model structure validation
+- Which patterns need custom Jinja2 filters?
+
+**Lessons Learned for Epic 2:**
+- Specific technical notes for each pattern implementation
+- Recommended Jinja2 syntax patterns
+- Table handling best practices (if Pattern 6 works)
+- Performance observations (generation time)
+- Template conversion gotchas to avoid
+
+**Recommendations:**
+- Changes needed for Epic 2 implementation
+- Additional helper functions to build
+- Template structure improvements
+- Data model refinements
+
+**Next Steps:**
+- Epic 2 story updates based on POC findings
+- Mock JSON files usage in Epic 3.5
+- Any blockers or risks identified
+
+**And** Report saved as `docs/poc-validation-report.md`
+**And** Report shared with stakeholders for review
+**And** Epic 2 stories updated with POC technical notes
+
+**Prerequisites:** Story 1.5.7 (validation complete)
+
+**Technical Notes:**
+- Follow report template structure in `docs/draft-report-poc-plan.md` Phase 5.1
+- Include quantitative results: "8/9 patterns passed", "formatting 95% preserved"
+- Be specific about issues: "Table borders lost in row 15" not "table issues"
+- Prioritize findings by severity: critical blockers vs minor edge cases
+- Include code snippets of successful Jinja2 patterns for reference
+
+**Deliverable:**
+- `docs/poc-validation-report.md` - comprehensive results report
+- Executive summary suitable for stakeholder presentation
+- Technical appendix with detailed findings for Epic 2 implementation
+
+---
+
 ## Epic 3.5: Project Data Service
+
+> **⚠️ SEQUENCE UPDATE (2025-11-19):** This epic has been **deferred** to Week 4. Epic 4 (RIR Template) is now prioritized for Week 3 to validate end-to-end document generation with mock JSON files before building the Riskuity API integration. Story 3.5.1 (schema design) is **COMPLETED** ✅ and will be used by Epic 4.
 
 **Epic Goal:** Implement a data service layer that fetches project data from Riskuity once, transforms it to a canonical JSON schema, caches it in S3, then serves multiple templates from the cached JSON.
 
@@ -674,6 +1664,8 @@ async def fetch_project_data(
 
 ## Epic 4: Recipient Information Request (RIR) Template
 
+> **🎯 SEQUENCE UPDATE (2025-11-19):** This epic has been **PRIORITIZED** for Week 3 (before Epic 3.5). We will use the completed canonical JSON schema (Story 3.5.1 ✅) and mock JSON data files to build end-to-end RIR document generation. This validates the architecture with visible deliverables before investing in Riskuity API integration.
+
 **Epic Goal:** Implement the RIR template generation using the data service pattern, validating the end-to-end architecture with a simpler template before tackling the complex Draft Audit Report.
 
 **Business Value:** Provides early stakeholder value with a complete, usable template while validating the data service architecture. RIR is generated early in the review process and serves as proof-of-concept for the full system.
@@ -681,7 +1673,7 @@ async def fetch_project_data(
 **Architectural Components:** `templates/rir-package.docx`, `services/conditional_logic.py` (RIR-specific), `api/routes/generate.py` (RIR endpoint), `models/template_data.py` (RIRTemplateData)
 
 **Template Characteristics:**
-- **Complexity:** LOW (15 fields, 1 conditional pattern)
+- **Complexity:** LOW (16 fields, 1 conditional pattern)
 - **Fields:** Simple merge field replacement
 - **Conditional Logic:** Review type selection only (CL-RIR-1)
 - **Document Type:** Information request form sent before site visits
@@ -700,7 +1692,7 @@ So that python-docxtpl can populate it with project data.
 
 **Given** The source RIR template (.docx file) from docs/requirements
 **When** I convert bracket fields to Jinja2 syntax
-**Then** All 15 merge fields are converted:
+**Then** All 16 merge fields are converted:
 
 **Cover Page Fields:**
 - `[#]` (Region) → `{{ region_number }}`
@@ -717,6 +1709,7 @@ So that python-docxtpl can populate it with project data.
 
 **Body Content Fields:**
 - `[FTA PM for Recipient]` → `{{ fta_program_manager_name }}`
+- `[FTA PM Title]` → `{{ fta_program_manager_title }}`
 - `[FTA PM Phone #]` → `{{ fta_program_manager_phone }}`
 - `[FTA PM Email Address]` → `{{ fta_program_manager_email }}`
 
@@ -738,6 +1731,7 @@ rir-package:
     - lead_reviewer_phone
     - lead_reviewer_email
     - fta_program_manager_name
+    - fta_program_manager_title
     - fta_program_manager_phone
     - fta_program_manager_email
   optional_fields:
@@ -2283,47 +3277,98 @@ So that we can validate the system works in AWS infrastructure.
 
 ## Epic Breakdown Summary
 
-**Total: 9 Epics, 43 Stories** (Updated with Data Service Pattern and RIR Template)
+**Total: 11 Epics, 58 Stories** (Updated with Multi-Tenant Foundation, Draft Report POC, Data Service Pattern, and RIR Template)
+**Note:** Story 1.4 eliminated - RIR POC already validated python-docxtpl
 
-**REVISED EPIC SEQUENCE:**
-- **Epic 1: Foundation & Template Engine** - 6 stories ✅ (Weeks 1-2)
-- **Epic 3.5: Project Data Service** - 7 stories 🆕 (Week 3)
-- **Epic 4: Recipient Information Request Template** - 6 stories 🆕 (Week 4)
-- **Epic 2: Conditional Logic Engine** - 8 stories 🔄 DEFERRED (Weeks 5-6)
+**REVISED EPIC SEQUENCE (Updated 2025-11-19 - Multi-Tenant + POC):**
+- **Epic 0: Multi-Tenant Foundation** - 8 stories 🆕 CRITICAL (Week 0-1, parallel with Epic 1) ⏸️ DEFERRED
+- **Epic 1: Foundation & Template Engine** - 5 stories ✅ IN PROGRESS (Weeks 1-2) - Story 1.4 eliminated
+- **Epic 1.5: Draft Report Conditional Logic POC** - 8 stories 🆕 POC (Week 2.5) 🎯 READY TO START
+- **Epic 4: Recipient Information Request Template** - 6 stories 🆕 (Week 3) 🔄 DEFERRED
+- **Epic 3.5: Project Data Service** - 7 stories 🆕 (Week 4) 🔄 DEFERRED
+- **Epic 2: Conditional Logic Engine** - 8 stories (Weeks 5-6) 🔄 DEFERRED
 - **Epic 3: Riskuity API Integration** - ❌ MERGED into Epic 3.5
-- **Epic 5: Validation Engine** - 3 stories (renumbered from Epic 4) (Week 7)
-- **Epic 6: AWS S3 Storage** - 2 stories (renumbered from Epic 5) (Week 7)
-- **Epic 7: REST API & React Integration** - 5 stories (renumbered from Epic 6) (Week 8)
-- **Epic 8: Testing & AWS Deployment** - 6 stories (renumbered from Epic 7) (Week 9)
+- **Epic 5: Validation Engine** - 3 stories (Week 7) 🔄 DEFERRED
+- **Epic 6: AWS S3 Storage** - 2 stories (Week 7) 🔄 DEFERRED
+- **Epic 7: REST API & React Integration** - 5 stories (Week 8) 🔄 DEFERRED
+- **Epic 8: Testing & AWS Deployment** - 6 stories (Week 9) 🔄 DEFERRED
 
-**Estimated Timeline (REVISED):**
-- **Epic 1:** 1-2 weeks (foundation + POC validation)
-- **Epic 3.5:** 1 week (data service layer - enables parallel development)
-- **Epic 4:** 1 week (RIR template - validates architecture with simple template)
-- **Epic 2:** 1.5 weeks (complex conditional logic - benefits from Epic 4 lessons)
-- **Epic 5:** 0.5 weeks (validation)
-- **Epic 6:** 0.5 weeks (S3 storage)
-- **Epic 7:** 0.5 weeks (REST API)
-- **Epic 8:** 1 week (testing + deployment)
+**🆕 NEW: Epic 0 Rationale (Multi-Tenant Foundation) - DEFERRED:**
+- **Foundational:** All subsequent epics depend on multi-tenant architecture
+- **Can run parallel with Epic 1:** Infrastructure (DynamoDB, Authorizer) can be built while Epic 1 develops core services
+- **Critical for compliance:** Strict data isolation required before any API endpoints go live
+- **5-minute tenant onboarding:** Enables adding new contractors without redeployment
+- **⏸️ DEFERRED:** Per user request, holding on Epic 0 to focus on Draft Report POC first
 
-**Total: ~7-8 weeks for MVP** (extended from original 5-6 weeks to include data service architecture and RIR template as architectural validation)
+**🆕 NEW: Epic 1.5 Rationale (Draft Report POC) - PRIORITIZED:**
+- **De-risks Epic 2:** Validates all 9 conditional logic patterns work with python-docxtpl BEFORE full implementation
+- **Real-world data:** Uses data extracted from actual prior year Final Reports for authentic testing
+- **Creates test fixtures:** Mock JSON files become reusable test data for Epic 3.5 (Data Service)
+- **Identifies edge cases:** Discovers Word formatting limitations, required helper functions, optimal template structure
+- **Fast validation:** 1 week POC prevents weeks of Epic 2 rework if approach doesn't work
+- **Visible deliverable:** Generates real Draft Audit Reports from JSON → proves end-to-end concept
 
-**Key Dependencies (REVISED):**
-- ✅ **Epic 1 must complete first** (foundation for all)
-- ✅ **Epic 3.5 depends on Epic 1** (needs DocumentGenerator, exceptions, logging)
-- ✅ **Epic 4 depends on Epic 3.5** (RIR consumes data service JSON)
-- 🔄 **Epic 2 DEFERRED after Epic 4** (learns from RIR implementation, reduces risk)
-- **Epic 5-8 sequence unchanged** (same dependencies as before)
+**Rationale for Epic 4 → Epic 3.5 Swap:**
+- **Epic 4 first:** Validates end-to-end document generation using mock JSON files
+- **Visible progress:** Generates real RIR documents from the 3 mock data files
+- **Risk reduction:** Proves schema works for templates before building Riskuity integration
+- **Epic 3.5 later:** Becomes data acquisition layer replacing mock files with live API
+
+**Estimated Timeline (REVISED with POC Focus):**
+- **Epic 0:** 0.5-1 week ⏸️ DEFERRED (hold for later)
+- **Epic 1:** 1-2 weeks (foundation + POC validation) ✅ IN PROGRESS
+- **Epic 1.5:** 0.5-1 week (Draft Report POC - validate all 9 patterns) 🎯 NEXT
+- **Epic 4:** 1 week (RIR template with mock JSON) 🔄 DEFERRED
+- **Epic 3.5:** 1 week (data service layer) 🔄 DEFERRED
+- **Epic 2:** 1.5 weeks (conditional logic - informed by POC findings) 🔄 DEFERRED
+- **Epic 5:** 0.5 weeks (validation) 🔄 DEFERRED
+- **Epic 6:** 0.5 weeks (S3 storage) 🔄 DEFERRED
+- **Epic 7:** 0.5 weeks (REST API) 🔄 DEFERRED
+- **Epic 8:** 1 week (testing + deployment) 🔄 DEFERRED
+
+**Total: ~7-9 weeks for MVP** (includes POC validation, data service architecture, and RIR template validation)
+
+**🎯 IMMEDIATE FOCUS: Epic 1.5 (Week 2.5) - READY TO START**
+- ❌ Story 1.4 eliminated (RIR POC already validated python-docxtpl)
+- ✅ Epic 1.5 can start immediately (no dependencies)
+- Execute Epic 1.5 POC with prior year data
+- Validate all 9 conditional logic patterns before proceeding to Epic 2
+
+**Parallel Work Available:**
+- Continue Epic 1 foundation stories (1.1-1.3, 1.5-1.6) if not complete
+- Epic 1.5 stories 1.5.1-1.5.3 (analysis & data extraction) can proceed independently
+
+**Key Dependencies (REVISED with POC Focus):**
+- ⏸️ **Epic 0 (Multi-Tenant) DEFERRED** - will revisit after POC validation
+- ✅ **Epic 1 Stories 1.1-1.3, 1.5-1.6** (foundation for all services) - IN PROGRESS
+- ❌ **Story 1.4 ELIMINATED** - RIR POC already validated python-docxtpl works
+- 🆕 **Epic 1.5 can start immediately** (no dependencies - RIR POC completed validation) - READY
+- 🔄 **Epic 2 depends on Epic 1.5** (conditional logic implementation informed by POC findings)
+- 🔄 **Epic 3.5 depends on Epic 1** (needs DocumentGenerator, exceptions, logging)
+- 🔄 **Epic 4 depends on Epic 3.5** (RIR consumes data service JSON)
+- ⏸️ **Epic 6 (S3) depends on Epic 0** (tenant-scoped S3 prefixes) - deferred
+- ⏸️ **Epic 7 (REST API) depends on Epic 0** (API Gateway authorizer) - deferred
+- **Epic 5 & 8 sequence unchanged** (same dependencies as before)
 
 **Critical Path Changes:**
 - **Old:** Epic 1 → Epic 2 (Conditional Logic) → Epic 3 (Riskuity) → Templates
-- **New:** Epic 1 → Epic 3.5 (Data Service) → Epic 4 (RIR) → Epic 2 (Conditional Logic) → Templates
+- **Previous Plan:** Epic 0 (Multi-Tenant) || Epic 1 (Foundation) → Epic 3.5 (Data Service) → Epic 4 (RIR) → Epic 2 (Conditional Logic)
+- **🎯 NEW PLAN:** Epic 1 (Foundation) → Epic 1.5 (POC) → Epic 2 (Conditional Logic - validated) → Epic 3.5 (Data Service) → Epic 4 (RIR)
+- **Note:** Epic 0 (Multi-Tenant) deferred until after POC proves approach
 
-**Rationale for Sequence Change:**
-1. **Data Service Pattern** (Epic 3.5) enables multi-template efficiency and parallel development
-2. **RIR Template** (Epic 4) validates complete architecture with simpler use case
-3. **Conditional Logic** (Epic 2) benefits from architectural lessons learned in Epic 4
-4. **Reduced Risk:** Tackle complex Draft Report logic after validating data flow with RIR
+**Rationale for NEW Sequence:**
+1. ✅ **Epic 1 (Foundation)** establishes FastAPI, python-docxtpl, logging, exceptions
+2. 🆕 **Epic 1.5 (POC)** validates ALL 9 conditional logic patterns with real prior year data - DE-RISKS entire approach
+3. **Epic 2 (Conditional Logic)** proceeds with CONFIDENCE after POC proves patterns work
+4. **Epic 3.5 (Data Service)** can use POC's mock JSON files as integration test fixtures
+5. **Epic 4 (RIR)** benefits from proven conditional logic patterns
+6. ⏸️ **Epic 0 (Multi-Tenant)** revisited later - not blocking POC or core document generation
+
+**🎯 Risk Mitigation Strategy:**
+- **POC FIRST** (Epic 1.5) validates risky technical approach (9 patterns, Word formatting) in 1 week
+- **If POC fails:** Pivot to alternative approach (different library, .NET, etc.) - only 1 week lost
+- **If POC succeeds:** Epic 2 implementation has validated patterns, helper functions, and data model
+- **Multi-tenant deferred:** Can add later without rewriting core document generation logic
 
 **Next Steps:**
 1. Review this epic breakdown with stakeholders

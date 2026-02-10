@@ -1,0 +1,83 @@
+# RIR Template Field Definitions
+# This metadata describes the fields required for the Recipient Information Request (RIR) template
+
+rir-package:
+  name: "Recipient Information Request Package"
+  description: "Information request sent to recipients before site visits for FTA compliance reviews"
+  template_file: "rir-package.docx"
+  template_version: "1.0"
+  created_from: "RO_State_Recipient_FY2025_RecipientInformationRequestPackage_Final_1.3.25.docx"
+
+  # Fields that MUST be present in the context for rendering
+  required_fields:
+    - region_number                    # FTA Region (1-10)
+    - review_type                      # Type of compliance review
+    - recipient_name                   # Full legal name of transit agency
+    - recipient_city_state             # Location (City, ST format)
+    - recipient_id                     # FTA-assigned recipient identifier
+    - lead_reviewer_name               # Name of lead reviewer
+    - contractor_name                  # Name of contracting firm
+    - lead_reviewer_phone              # Lead reviewer contact phone
+    - lead_reviewer_email              # Lead reviewer contact email
+    - fta_program_manager_name         # Assigned FTA PM name
+    - fta_program_manager_title        # FTA PM job title
+    - fta_program_manager_phone        # FTA PM contact phone
+    - fta_program_manager_email        # FTA PM contact email
+
+  # Fields that MAY be present (will use defaults if missing)
+  optional_fields:
+    - recipient_website                # Recipient's public website URL
+    - site_visit_dates                 # Site visit date range
+    - due_date                         # Response due date
+
+  # Default values for optional fields
+  default_values:
+    recipient_website: "N/A"
+    site_visit_dates: "TBD"
+    due_date: "TBD"
+
+  # Field type information for validation
+  field_types:
+    region_number: integer
+    review_type: string
+    recipient_name: string
+    recipient_city_state: string
+    recipient_id: string
+    recipient_website: string
+    site_visit_dates: string
+    lead_reviewer_name: string
+    contractor_name: string
+    lead_reviewer_phone: string
+    lead_reviewer_email: string
+    fta_program_manager_name: string
+    fta_program_manager_title: string
+    fta_program_manager_phone: string
+    fta_program_manager_email: string
+    due_date: string
+
+  # Enum values for constrained fields
+  enums:
+    review_type:
+      - "Triennial Review"
+      - "State Management Review"
+      - "Combined Triennial and State Management Review"
+      - "Special Review"
+      - "Limited Scope Review"
+
+  # Mapping from JSON schema paths to template variables
+  json_to_template_mapping:
+    "project.region_number": "region_number"
+    "project.review_type": "review_type"
+    "project.recipient_name": "recipient_name"
+    "project.recipient_city_state": "recipient_city_state"
+    "project.recipient_id": "recipient_id"
+    "project.recipient_website": "recipient_website"
+    "project.site_visit_dates": "site_visit_dates"
+    "contractor.lead_reviewer_name": "lead_reviewer_name"
+    "contractor.contractor_name": "contractor_name"
+    "contractor.lead_reviewer_phone": "lead_reviewer_phone"
+    "contractor.lead_reviewer_email": "lead_reviewer_email"
+    "fta_program_manager.fta_program_manager_name": "fta_program_manager_name"
+    "fta_program_manager.fta_program_manager_title": "fta_program_manager_title"
+    "fta_program_manager.fta_program_manager_phone": "fta_program_manager_phone"
+    "fta_program_manager.fta_program_manager_email": "fta_program_manager_email"

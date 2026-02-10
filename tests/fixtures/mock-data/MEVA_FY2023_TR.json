@@ -1,0 +1,292 @@
+{
+  "project_id": "MEVA-FY2023-TR-1374",
+  "generated_at": "2025-11-19T16:00:00Z",
+  "data_version": "1.0",
+
+  "project": {
+    "recipient_name": "Merrimack Valley Regional Transit Authority",
+    "recipient_acronym": "MEVA",
+    "recipient_id": "1374",
+    "recipient_city_state": "Haverhill, Massachusetts",
+    "recipient_website": null,
+    "region_number": 1,
+    "review_type": "Triennial Review",
+    "fiscal_year": 2023,
+    "scoping_meeting_date": "2023-02-24",
+    "site_visit_start_date": "2023-03-30",
+    "site_visit_end_date": "2023-07-07",
+    "exit_conference_date": "2023-07-07",
+    "exit_conference_format": "virtual",
+    "report_date": "2023-09-08"
+  },
+
+  "fta_program_manager": {
+    "name": "Peter Butler",
+    "title": "Regional Administrator",
+    "phone": "617-494-2729",
+    "email": "peter.butler@dot.gov",
+    "region": "Region 1"
+  },
+
+  "regional_officer": {
+    "name": "Gina Filosa",
+    "title": "Regional Administrator"
+  },
+
+  "contractor": {
+    "name": "Qi Tech, LLC",
+    "lead_reviewer_name": "Bobby Killebrew",
+    "lead_reviewer_phone": "512-350-9912",
+    "lead_reviewer_email": "bobby_killebrew@qitechllc.com",
+    "additional_reviewers": [
+      {
+        "name": "Olivia Fonseca",
+        "phone": "916-261-2246",
+        "email": "olivia_fonseca@qitechllc.com"
+      }
+    ]
+  },
+
+  "assessments": [
+    {
+      "review_area": "Legal",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Financial Management and Capacity",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Technical Capacity – Award Management",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Technical Capacity – Program Management & Subrecipient Oversight",
+      "finding": "NA",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Technical Capacity – Project Management",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Transit Asset Management",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Satisfactory Continuing Control",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Maintenance",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Procurement",
+      "finding": "D",
+      "deficiency_code": "P12-4",
+      "description": "Contract files lacking signed Buy America certifications. The procurement of Cummins Diesel Engines procured on 5/16/2022 did not have evidence that a signed Buy America Certification was received. 49 CFR 661.6 requires contractors that apply or bid for an award exceeding $150,000 to file the required Buy America certification.",
+      "corrective_action": "By October 2, 2023, MEVA must submit documentation that the Cummins Diesel Engines procured on 5/16/2022 complies with Buy America provisions.",
+      "due_date": "2023-10-02",
+      "date_closed": null
+    },
+    {
+      "review_area": "Disadvantaged Business Enterprise (DBE)",
+      "finding": "D",
+      "deficiency_code": "DBE5-1, DBE8-1, DBE8-2, DBE9-2, DBE12-5",
+      "description": "Multiple DBE deficiencies found: (1) DBE5-1 (REPEAT): Uniform reports contain inaccuracies - missing contracts, incorrect reporting of subcontractor payments as new awards; (2) DBE8-1: Inadequate implementation of race-neutral measures; (3) DBE8-2: Small business element not implemented; (4) DBE9-2: Inadequate good faith efforts determination; (5) DBE12-5: DBE termination/substitution provisions not implemented.",
+      "corrective_action": "By November 30, 2023, MEVA must submit: corrected FY 2019-2022 Uniform Reports, revised DBE Program plan, implementation plans for race-neutral and small business measures, good faith efforts determination methods, and DBE termination/substitution procedures.",
+      "due_date": "2023-11-30",
+      "date_closed": null,
+      "repeat_deficiency": true,
+      "repeat_history": "FY 2016, FY 2019"
+    },
+    {
+      "review_area": "Title VI",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Americans with Disabilities Act (ADA) – General",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "ADA – Complementary Paratransit",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Equal Employment Opportunity",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "School Bus",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Charter Bus",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Drug Free Workplace Act",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Drug and Alcohol Program",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Section 5307 Program Requirements",
+      "finding": "ND",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Section 5310 Program Requirements",
+      "finding": "NA",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Section 5311 Program Requirements",
+      "finding": "NA",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    },
+    {
+      "review_area": "Public Transportation Agency Safety Plans (PTASP)",
+      "finding": "D",
+      "deficiency_code": "PTASP1-5, PTASP2-6",
+      "description": "Two PTASP deficiencies found: (1) PTASP1-5: ASP not approved by Safety Committee; (2) PTASP2-6: Safety Committee not responsible for minimum requirements (risk mitigation identification, ineffective strategy identification, safety deficiency identification).",
+      "corrective_action": "By October 6, 2023, MEVA must submit evidence that Safety Committee approved its Agency Safety Plan and is responsible for minimum requirements.",
+      "due_date": "2023-10-06",
+      "date_closed": null
+    },
+    {
+      "review_area": "Cybersecurity",
+      "finding": "NA",
+      "deficiency_code": null,
+      "description": null,
+      "corrective_action": null,
+      "due_date": null,
+      "date_closed": null
+    }
+  ],
+
+  "erf_items": [],
+
+  "subrecipient": {
+    "reviewed": false,
+    "name": null,
+    "city_state": null,
+    "program_section": null,
+    "note": "MEVA operations managed by DGR Management, Inc. (contractor, not subrecipient)"
+  },
+
+  "attendees": {
+    "recipient": [],
+    "subrecipients": [],
+    "contractors_lessees": [],
+    "fta": [],
+    "contractor": []
+  },
+
+  "metadata": {
+    "has_deficiencies": true,
+    "deficiency_count": 8,
+    "deficiency_areas": "Procurement, Disadvantaged Business Enterprise, and Public Transportation Agency Safety Plans",
+    "erf_count": 0,
+    "erf_areas": "",
+    "covid19_context": true,
+    "repeat_deficiency_count": 1,
+    "repeat_deficiency_areas": "Disadvantaged Business Enterprise (DBE5-1)",
+    "deficiencies_open_count": 8,
+    "deficiencies_closed_count": 0
+  }
+}
