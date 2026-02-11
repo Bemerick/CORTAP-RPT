@@ -35,7 +35,7 @@ class RiskuityAuth:
         self.base_url = base_url.rstrip("/")
         self.token = None
 
-    async def get_token(self, username: str, password: str, mfa_code: str = None) -> str:
+    async def get_token(self, username: str, password: str, mfa_code: str = None, skip_initial_auth: bool = False) -> str:
         """
         Authenticate and retrieve the Riskuity access token.
         Supports two-step authentication with OTP for user accounts.
@@ -53,7 +53,7 @@ class RiskuityAuth:
         """
         print(f"🔐 Authenticating with Riskuity as user: {username}")
 
-        # Step 1: Initial authentication with email/password
+        # Step 1: Initial authentication with email/password (unless we already have session)
         url = f"{self.base_url}/users/get-auth-token"
         payload = {"email": username, "password": password}
 
@@ -79,23 +79,42 @@ class RiskuityAuth:
                     if status == "EMAIL_OTP":
                         print(f"   Status: {status} - OTP verification required")
 
-                        if not mfa_code:
-                            delivery = token_data.get("delivery", "email")
-                            print(f"\n⚠️  OTP required! Check your {delivery} for the verification code.")
-                            print(f"   Run again with: --mfa-code YOUR_CODE")
-                            raise Exception("OTP required but not provided")
-
-                        # Step 2: Submit OTP (needs password too)
-                        print(f"   Step 2: Submitting OTP code: {mfa_code}")
-
-                        # Extract the transformed username from the response
+                        # Get session and username from response
+                        session_token = token_data.get("session")
                         transformed_username = token_data.get("username")
+                        delivery = token_data.get("delivery", "email")
+
+                        # If MFA code not provided, prompt for it
+                        if not mfa_code:
+                            print(f"\n⚠️  OTP required! Check your {delivery} for the verification code.")
+                            print(f"   (The code will arrive in a few seconds...)")
+
+                            # Prompt user for OTP code
+                            try:
+                                mfa_code = input("\n   Enter the 6-digit OTP code: ").strip()
+                                if not mfa_code or len(mfa_code) != 6:
+                                    raise Exception("Invalid OTP code format")
+                            except (KeyboardInterrupt, EOFError):
+                                print("\n\n❌ Cancelled by user")
+                                raise Exception("User cancelled OTP entry")
+
+                        # Step 2: Respond to MFA challenge directly
+                        print(f"\n   Step 2: Responding to MFA challenge with OTP code: {mfa_code}")
                         print(f"   Transformed username: {transformed_username}")
 
-                        otp_payload = {"email": username, "password": password, "otp": mfa_code}
+                        # Use the correct endpoint: /users/respond_to_mfa_challenge
+                        mfa_challenge_url = f"{self.base_url}/users/respond_to_mfa_challenge"
+                        mfa_challenge_payload = {
+                            "username": transformed_username,
+                            "session": session_token,
+                            "mfa_code": mfa_code,
+                            "email": username,
+                            "challenge_type": "EMAIL_OTP"
+                        }
+
                         otp_response = await client.post(
-                            url,
-                            json=otp_payload,
+                            mfa_challenge_url,
+                            json=mfa_challenge_payload,
                             headers={
                                 "Content-Type": "application/json",
                                 "Accept": "application/json"
@@ -105,56 +124,10 @@ class RiskuityAuth:
 
                         if otp_response.status_code == 200:
                             final_data = otp_response.json()
-                            print(f"✅ OTP verification successful!")
-                            print(f"\n📄 Response data (truncated): {json.dumps(final_data, indent=2)[:500]}")
+                            print(f"✅ MFA challenge successful!")
+                            print(f"\n📄 Response: {json.dumps(final_data, indent=2)[:500]}")
 
-                            # Check if we got a session token that needs to be exchanged
-                            if final_data.get("status") == "EMAIL_OTP" and final_data.get("session"):
-                                session_token = final_data.get("session")
-                                transformed_username = final_data.get("username")
-                                print(f"\n   Step 3: Responding to MFA challenge...")
-                                print(f"   Transformed username: {transformed_username}")
-
-                                # Use the correct endpoint: /users/respond_to_mfa_challenge
-                                mfa_challenge_url = f"{self.base_url}/users/respond_to_mfa_challenge"
-                                mfa_challenge_payload = {
-                                    "username": transformed_username,
-                                    "session": session_token,
-                                    "mfa_code": mfa_code,
-                                    "email": username,
-                                    "challenge_type": "EMAIL_OTP"
-                                }
-
-                                session_response = await client.post(
-                                    mfa_challenge_url,
-                                    json=mfa_challenge_payload,
-                                    headers={
-                                        "Content-Type": "application/json",
-                                        "Accept": "application/json"
-                                    },
-                                    timeout=30.0
-                                )
-
-                                if session_response.status_code == 200:
-                                    session_data = session_response.json()
-                                    print(f"   Session exchange response: {json.dumps(session_data, indent=2)[:300]}")
-
-                                    self.token = (
-                                        session_data.get("access_token") or
-                                        session_data.get("token") or
-                                        session_data.get("access") or
-                                        session_data.get("jwt")
-                                    )
-
-                                    if self.token:
-                                        print(f"\n✅ Final authentication successful!")
-                                        self._decode_and_display_token(self.token)
-                                        return self.token
-                                else:
-                                    print(f"   Session exchange failed: {session_response.status_code}")
-                                    print(f"   Response: {session_response.text[:300]}")
-
-                            # Extract token - try different field names
+                            # Extract token from response
                             self.token = (
                                 final_data.get("access_token") or
                                 final_data.get("token") or
@@ -163,13 +136,13 @@ class RiskuityAuth:
                             )
 
                             if self.token:
+                                print(f"\n✅ Authentication complete!")
                                 self._decode_and_display_token(self.token)
                                 return self.token
                             else:
-                                print(f"\n⚠️  No token found. This might require contacting Riskuity team.")
+                                print(f"\n⚠️  No token found in response.")
                                 print(f"   Available fields: {list(final_data.keys())}")
-                                print(f"   Status: {final_data.get('status')}")
-                                raise Exception("Unable to obtain access token - multi-step flow unclear")
+                                raise Exception("No access token in MFA challenge response")
                         else:
                             error_msg = otp_response.text
                             print(f"❌ OTP verification failed: {otp_response.status_code}")
