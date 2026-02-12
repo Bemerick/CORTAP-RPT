@@ -12,6 +12,7 @@ from typing import Dict, Optional
 from datetime import datetime
 
 from docxtpl import DocxTemplate
+from jinja2 import Environment
 from jinja2.exceptions import TemplateError
 
 from app.exceptions import DocumentGenerationError
@@ -71,6 +72,33 @@ class DocumentGenerator:
                 "s3_enabled": s3_storage is not None
             }
         )
+
+    @staticmethod
+    def _date_format_filter(value, format_str="%B %d, %Y"):
+        """
+        Custom Jinja2 filter to format dates.
+
+        Args:
+            value: Date string or datetime object
+            format_str: strftime format string (default: "Month DD, YYYY")
+
+        Returns:
+            Formatted date string
+        """
+        if isinstance(value, datetime):
+            return value.strftime(format_str)
+        elif isinstance(value, str):
+            # Try parsing common date formats
+            for fmt in ["%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f", "%B %d, %Y"]:
+                try:
+                    dt = datetime.strptime(value, fmt)
+                    return dt.strftime(format_str)
+                except ValueError:
+                    continue
+            # If no format matches, return original string
+            return value
+        else:
+            return str(value)
 
     def _get_template_path(self, template_id: str) -> Path:
         """
@@ -227,9 +255,35 @@ class DocumentGenerator:
             # Get template (from cache or load)
             template = self._get_cached_template(template_id, correlation_id)
 
+            # Add default values for optional template variables
+            # These can be overridden by user configuration or Riskuity survey data
+            defaults = {
+                'regional_officer': {
+                    'name': 'TBD',
+                    'title': 'Regional Administrator',
+                    'phone': 'TBD',
+                    'email': 'TBD'
+                },
+                'attendees': [],
+                'contractors': [],  # Plural form for backward compatibility
+                'subrecipients_5307': [],
+                'subrecipients_5310': [],
+                'subrecipients_5311': []
+            }
+
+            # Merge context with defaults (context takes precedence)
+            merged_context = {**defaults, **context}
+
+            # Add custom filters to context as functions
+            # (docxtpl may not properly pass jinja_env filters)
+            context_with_filters = {
+                **merged_context,
+                'date_format': self._date_format_filter
+            }
+
             # Render template with context
             try:
-                template.render(context)
+                template.render(context_with_filters)
             except TemplateError as e:
                 logger.error(
                     f"Jinja2 template rendering error: {template_id}",

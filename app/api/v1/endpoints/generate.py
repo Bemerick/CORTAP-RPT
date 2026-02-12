@@ -9,6 +9,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, HTTPException, Header, Query
 from fastapi.responses import JSONResponse
 
@@ -171,56 +172,64 @@ async def generate_report_sync(
             extra={"correlation_id": correlation_id}
         )
 
-        riskuity_client = RiskuityClient(
-            base_url=settings.riskuity_base_url,
-            api_key=token  # Pass user token for authentication
-        )
-        transformer = DataTransformer()
-        validator = JsonValidator()
-        s3_storage = S3Storage()
+        # Create HTTP client for Riskuity API calls
+        async with httpx.AsyncClient(timeout=60.0) as http_client:
+            riskuity_client = RiskuityClient(
+                base_url=settings.riskuity_base_url,
+                api_key=token,  # Pass user token for authentication
+                http_client=http_client
+            )
 
-        # Step 2: Fetch project data from Riskuity (10-20s)
-        logger.info(
-            f"Fetching project data from Riskuity",
-            extra={
-                "project_id": request.project_id,
-                "correlation_id": correlation_id
-            }
-        )
-
-        try:
-            project_data = await riskuity_client.get_project(request.project_id)
-            project_controls = await riskuity_client.get_project_controls(request.project_id)
-        except RiskuityAPIError as e:
-            logger.error(
-                f"Riskuity API error: {str(e)}",
+            # Step 2: Fetch project controls from Riskuity (10-20s)
+            logger.info(
+                f"Fetching project controls from Riskuity",
                 extra={
                     "project_id": request.project_id,
-                    "error_code": e.error_code,
-                    "correlation_id": correlation_id
-                },
-                exc_info=True
-            )
-            raise HTTPException(
-                status_code=502,
-                detail={
-                    "error": "riskuity_api_error",
-                    "message": f"Failed to fetch data from Riskuity: {str(e)}",
-                    "details": {"error_code": e.error_code},
-                    "timestamp": datetime.utcnow().isoformat() + "Z",
                     "correlation_id": correlation_id
                 }
             )
 
-        # Step 3: Transform to canonical JSON (1-2s)
+            try:
+                project_controls = await riskuity_client.get_project_controls(
+                    project_id=request.project_id,
+                    correlation_id=correlation_id
+                )
+            except RiskuityAPIError as e:
+                logger.error(
+                    f"Riskuity API error: {str(e)}",
+                    extra={
+                        "project_id": request.project_id,
+                        "error_code": e.error_code,
+                        "correlation_id": correlation_id
+                    },
+                    exc_info=True
+                )
+                raise HTTPException(
+                    status_code=502,
+                    detail={
+                        "error": "riskuity_api_error",
+                        "message": f"Failed to fetch data from Riskuity: {str(e)}",
+                        "details": {"error_code": e.error_code},
+                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                        "correlation_id": correlation_id
+                    }
+                )
+
+        # Step 3: Initialize remaining services
+        transformer = DataTransformer()
+        validator = JsonValidator()
+        s3_storage = S3Storage()
+
+        # Step 4: Transform to canonical JSON (1-2s)
         logger.info(
             "Transforming data to canonical JSON",
             extra={"correlation_id": correlation_id}
         )
 
-        canonical_json = await transformer.transform(
-            project=project_data,
-            controls=project_controls
+        canonical_json = transformer.transform(
+            project_id=request.project_id,
+            riskuity_project_controls=project_controls,
+            correlation_id=correlation_id
         )
 
         # Step 4: Validate data (1s)
@@ -258,9 +267,22 @@ async def generate_report_sync(
             extra={"correlation_id": correlation_id}
         )
 
+        logger.info(
+            "DEBUG: About to call validator.check_completeness()",
+            extra={"correlation_id": correlation_id}
+        )
+
         completeness = await validator.check_completeness(
             canonical_json,
             template_id=request.report_type
+        )
+
+        logger.info(
+            "DEBUG: Completeness check returned successfully",
+            extra={
+                "can_generate": completeness.can_generate,
+                "correlation_id": correlation_id
+            }
         )
 
         if not completeness.can_generate:
@@ -287,20 +309,55 @@ async def generate_report_sync(
                 }
             )
 
-        # Step 6: Generate document (10-20s)
+        # DEBUG: Log checkpoint immediately after completeness check
         logger.info(
-            "Generating Word document",
-            extra={
-                "template": request.report_type,
-                "correlation_id": correlation_id
-            }
+            "DEBUG: Checkpoint 0 - IMMEDIATELY after completeness check, about to start document generation section",
+            extra={"correlation_id": correlation_id}
         )
 
+        # Step 6: Generate document (10-20s)
         try:
-            generator = DocumentGenerator()
+            logger.info(
+                "DEBUG: Checkpoint 2 - Inside document generation try block",
+                extra={"correlation_id": correlation_id}
+            )
+
+            logger.info(
+                "Generating Word document",
+                extra={
+                    "template": request.report_type,
+                    "correlation_id": correlation_id
+                }
+            )
+
+            logger.info(
+                "DEBUG: Checkpoint 3 - About to import json",
+                extra={"correlation_id": correlation_id}
+            )
+
+            # DEBUG: Save canonical JSON for inspection
+            import json
+
+            logger.info(
+                "DEBUG: Checkpoint 4 - JSON imported, opening debug file",
+                extra={"correlation_id": correlation_id}
+            )
+
+            try:
+                with open('/tmp/canonical_json_debug.json', 'w') as f:
+                    json.dump(canonical_json, f, indent=2, default=str)
+                logger.info(
+                    "DEBUG: Saved canonical JSON to /tmp/canonical_json_debug.json",
+                    extra={"correlation_id": correlation_id}
+                )
+            except Exception as e:
+                logger.error(f"Failed to save debug JSON: {e}", exc_info=True)
+
+            generator = DocumentGenerator(template_dir=settings.template_dir)
             document_bytes = await generator.generate(
                 template_id=request.report_type,
-                data=canonical_json
+                context=canonical_json,
+                correlation_id=correlation_id
             )
         except DocumentGenerationError as e:
             logger.error(
@@ -312,6 +369,14 @@ async def generate_report_sync(
                 },
                 exc_info=True
             )
+            # Try to save canonical JSON for debugging even on error
+            try:
+                import json
+                with open('/tmp/canonical_json_error.json', 'w') as f:
+                    json.dump(canonical_json, f, indent=2, default=str)
+                logger.info(f"Saved canonical JSON to /tmp/canonical_json_error.json")
+            except:
+                pass
             raise HTTPException(
                 status_code=500,
                 detail={
@@ -322,12 +387,43 @@ async def generate_report_sync(
                     "correlation_id": correlation_id
                 }
             )
+        except Exception as e:
+            # Catch any other unexpected errors in document generation
+            logger.error(
+                f"CRITICAL: Unexpected error in document generation section: {type(e).__name__}: {e}",
+                extra={
+                    "template": request.report_type,
+                    "correlation_id": correlation_id
+                },
+                exc_info=True
+            )
+            # Try to save canonical JSON for debugging
+            try:
+                import json
+                with open('/tmp/canonical_json_error.json', 'w') as f:
+                    json.dump(canonical_json, f, indent=2, default=str)
+                logger.info(f"Saved canonical JSON to /tmp/canonical_json_error.json")
+            except:
+                pass
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "generation_failed",
+                    "message": f"Unexpected error: {type(e).__name__}: {str(e)}",
+                    "details": {"error_type": type(e).__name__},
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "correlation_id": correlation_id
+                }
+            )
 
         # Step 7: Upload to S3 (2-5s)
+        # Get file size from BytesIO object
+        file_size = document_bytes.getbuffer().nbytes
+
         logger.info(
             "Uploading document to S3",
             extra={
-                "file_size_bytes": len(document_bytes),
+                "file_size_bytes": file_size,
                 "correlation_id": correlation_id
             }
         )
@@ -336,7 +432,7 @@ async def generate_report_sync(
 
         try:
             s3_key = await s3_storage.upload_document(
-                file_content=document_bytes,
+                content=document_bytes,
                 project_id=str(request.project_id),
                 template_id=request.report_type,
                 filename=filename
@@ -405,7 +501,7 @@ async def generate_report_sync(
             extra={
                 "report_id": report_id,
                 "generation_time_ms": generation_time_ms,
-                "file_size_bytes": len(document_bytes),
+                "file_size_bytes": file_size,
                 "correlation_id": correlation_id
             }
         )
@@ -419,7 +515,7 @@ async def generate_report_sync(
             download_url=download_url,
             expires_at=(end_time + timedelta(hours=24)).isoformat() + "Z",
             generated_at=end_time.isoformat() + "Z",
-            file_size_bytes=len(document_bytes),
+            file_size_bytes=file_size,
             metadata=ReportMetadata(
                 recipient_name=canonical_json["project"]["recipient_name"],
                 review_type=canonical_json["project"]["review_type"],
