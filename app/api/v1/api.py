@@ -1,7 +1,7 @@
 """API v1 router configuration."""
 
 from fastapi import APIRouter
-from app.api.v1.endpoints import test, documents, data
+from app.api.v1.endpoints import test, documents, data, generate
 
 # Temporarily commented out until authentication is implemented (Epic 0)
 # from app.core.users import fastapi_users
@@ -36,3 +36,4 @@ api_v1_router = APIRouter(prefix="/api/v1")
 api_v1_router.include_router(test.router, tags=["Test"])
 api_v1_router.include_router(data.router, tags=["Data"])
 api_v1_router.include_router(documents.router, tags=["Documents"])
+api_v1_router.include_router(generate.router, tags=["Generation"])
