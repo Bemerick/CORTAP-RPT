@@ -1,0 +1,57 @@
+# SAM Build Ignore
+# Exclude unnecessary files from Lambda deployment package
+
+# Development files
+.vscode/
+.idea/
+.bmad-ephemeral/
+*.pyc
+__pycache__/
+.pytest_cache/
+.coverage
+*.log
+
+# Documentation (too large for Lambda)
+docs/archive/
+docs/completed_reviews/
+docs/poc-data-sources/
+docs/RIR 2026/
+docs/Working Final Report/
+docs/*.xlsx
+docs/*.docx
+docs/*.pdf
+docs/*.html
+docs/requirements/*.pdf
+docs/requirements/*.html
+docs/requirements/*.fld/
+
+# Test files
+tests/
+scripts/test_*.py
+scripts/manage_project_config.py
+
+# Git
+.git/
+.gitignore
+
+# Environment
+.env
+.env.*
+venv/
+env/
+*.local
+
+# Output directories
+output/
+.aws-sam/
+
+# Session status files
+*-STATUS*.md
+RESUME*.md
+SESSION*.md
+TESTING*.md
+
+# Keep these for deployment:
+# config/ - INCLUDE (project setup configuration)
+# app/templates/ - INCLUDE (Word templates)
+# src/ - INCLUDE (mapping module)

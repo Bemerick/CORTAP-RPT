@@ -36,6 +36,9 @@ warm_containers = "EAGER"
 stack_name = "cortap-rpt-dev"
 parameter_overrides = "Environment=\"dev\" LogLevel=\"DEBUG\""
 region = "us-gov-west-1"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = false
+resolve_s3 = true
 
 # Staging environment
 [staging]

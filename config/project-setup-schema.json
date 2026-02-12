@@ -1,0 +1,267 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CORTAP Project Setup Configuration",
+  "description": "Configuration schema for project-specific setup data not available in Riskuity API",
+  "type": "object",
+  "properties": {
+    "projects": {
+      "type": "array",
+      "description": "Array of project configurations indexed by Riskuity project ID",
+      "items": {
+        "type": "object",
+        "required": [
+          "project_id",
+          "project_info",
+          "contractor",
+          "fta_program_manager",
+          "regional_officer"
+        ],
+        "properties": {
+          "project_id": {
+            "type": "integer",
+            "description": "Riskuity project ID"
+          },
+          "project_info": {
+            "type": "object",
+            "required": [
+              "region_number",
+              "review_type",
+              "recipient_city_state",
+              "fiscal_year",
+              "site_visit_start_date",
+              "site_visit_end_date",
+              "exit_conference_format"
+            ],
+            "properties": {
+              "region_number": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10,
+                "description": "FTA Region number (1-10)"
+              },
+              "review_type": {
+                "type": "string",
+                "enum": [
+                  "Triennial Review",
+                  "State Management Review",
+                  "Combined Triennial and State Management Review"
+                ],
+                "description": "Type of review being conducted"
+              },
+              "recipient_city_state": {
+                "type": "string",
+                "pattern": "^.+, [A-Z]{2}$",
+                "description": "Recipient location in format: 'City, ST'",
+                "examples": ["Seattle, WA", "New York, NY"]
+              },
+              "recipient_acronym": {
+                "type": "string",
+                "description": "Short name or acronym for recipient agency",
+                "examples": ["METRO", "MUNI", "CTA"]
+              },
+              "recipient_website": {
+                "type": "string",
+                "format": "uri",
+                "description": "Recipient agency website URL"
+              },
+              "fiscal_year": {
+                "type": "string",
+                "pattern": "^FY\\d{4}$",
+                "description": "Fiscal year in format FY####",
+                "examples": ["FY2026", "FY2027"]
+              },
+              "site_visit_start_date": {
+                "type": "string",
+                "format": "date",
+                "description": "Site visit start date (YYYY-MM-DD)",
+                "examples": ["2026-03-15"]
+              },
+              "site_visit_end_date": {
+                "type": "string",
+                "format": "date",
+                "description": "Site visit end date (YYYY-MM-DD)",
+                "examples": ["2026-03-19"]
+              },
+              "site_visit_dates": {
+                "type": "string",
+                "description": "Human-readable date range for site visit",
+                "examples": ["March 15-19, 2026"]
+              },
+              "exit_conference_format": {
+                "type": "string",
+                "enum": ["virtual", "in-person"],
+                "description": "Format of exit conference"
+              },
+              "report_date": {
+                "type": "string",
+                "format": "date",
+                "description": "Report generation date (YYYY-MM-DD). Defaults to today if not specified."
+              }
+            }
+          },
+          "contractor": {
+            "type": "object",
+            "required": [
+              "lead_reviewer_name",
+              "company_name",
+              "lead_reviewer_phone",
+              "lead_reviewer_email"
+            ],
+            "properties": {
+              "lead_reviewer_name": {
+                "type": "string",
+                "description": "Full name of lead contractor/reviewer",
+                "examples": ["John Smith"]
+              },
+              "company_name": {
+                "type": "string",
+                "description": "Contractor company name",
+                "examples": ["ABC Consulting Group"]
+              },
+              "lead_reviewer_phone": {
+                "type": "string",
+                "pattern": "^\\(?\\d{3}\\)?[-.\\s]?\\d{3}[-.\\s]?\\d{4}$",
+                "description": "Lead reviewer phone number",
+                "examples": ["(555) 123-4567", "555-123-4567"]
+              },
+              "lead_reviewer_email": {
+                "type": "string",
+                "format": "email",
+                "description": "Lead reviewer email address",
+                "examples": ["jsmith@abcconsulting.com"]
+              }
+            }
+          },
+          "fta_program_manager": {
+            "type": "object",
+            "required": ["name", "title", "phone", "email"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "FTA Program Manager full name",
+                "examples": ["Jane Doe"]
+              },
+              "title": {
+                "type": "string",
+                "description": "FTA Program Manager title",
+                "examples": ["Transportation Program Specialist", "Regional Administrator"]
+              },
+              "phone": {
+                "type": "string",
+                "pattern": "^\\(?\\d{3}\\)?[-.\\s]?\\d{3}[-.\\s]?\\d{4}$",
+                "description": "FTA PM phone number",
+                "examples": ["(202) 366-1234"]
+              },
+              "email": {
+                "type": "string",
+                "format": "email",
+                "description": "FTA PM email address",
+                "examples": ["jane.doe@dot.gov"]
+              }
+            }
+          },
+          "regional_officer": {
+            "type": "object",
+            "required": ["name", "title", "phone", "email"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Regional Administrator full name",
+                "examples": ["Robert Johnson"]
+              },
+              "title": {
+                "type": "string",
+                "description": "Regional officer title",
+                "default": "Regional Administrator",
+                "examples": ["Regional Administrator", "Acting Regional Administrator"]
+              },
+              "phone": {
+                "type": "string",
+                "pattern": "^\\(?\\d{3}\\)?[-.\\s]?\\d{3}[-.\\s]?\\d{4}$",
+                "description": "Regional officer phone number"
+              },
+              "email": {
+                "type": "string",
+                "format": "email",
+                "description": "Regional officer email address"
+              }
+            }
+          },
+          "attendees": {
+            "type": "array",
+            "description": "List of site visit attendees",
+            "items": {
+              "type": "object",
+              "required": ["name", "organization"],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Attendee full name"
+                },
+                "organization": {
+                  "type": "string",
+                  "description": "Attendee organization/agency"
+                },
+                "title": {
+                  "type": "string",
+                  "description": "Attendee job title"
+                },
+                "email": {
+                  "type": "string",
+                  "format": "email",
+                  "description": "Attendee email"
+                }
+              }
+            }
+          },
+          "subrecipients": {
+            "type": "object",
+            "description": "Subrecipients by program type",
+            "properties": {
+              "5307": {
+                "type": "array",
+                "description": "Section 5307 subrecipients",
+                "items": {
+                  "type": "object",
+                  "required": ["name"],
+                  "properties": {
+                    "name": {"type": "string"},
+                    "location": {"type": "string"}
+                  }
+                }
+              },
+              "5310": {
+                "type": "array",
+                "description": "Section 5310 subrecipients",
+                "items": {
+                  "type": "object",
+                  "required": ["name"],
+                  "properties": {
+                    "name": {"type": "string"},
+                    "location": {"type": "string"}
+                  }
+                }
+              },
+              "5311": {
+                "type": "array",
+                "description": "Section 5311 subrecipients",
+                "items": {
+                  "type": "object",
+                  "required": ["name"],
+                  "properties": {
+                    "name": {"type": "string"},
+                    "location": {"type": "string"}
+                  }
+                }
+              }
+            }
+          },
+          "notes": {
+            "type": "string",
+            "description": "Optional notes about this project configuration"
+          }
+        }
+      }
+    }
+  }
+}

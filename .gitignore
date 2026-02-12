@@ -73,3 +73,4 @@ celerybeat.pid
 
 # Riskuity token cache (contains sensitive authentication tokens)
 .riskuity_token_cache.json
+.aws-sam/

@@ -146,22 +146,49 @@ Resources:
           RISKUITY_API_URL: !Ref RiskuityApiUrl
           ENVIRONMENT: !Ref Environment
           LOG_LEVEL: !Ref LogLevel
-      # Lambda Function URL Configuration (bypasses API Gateway 29s timeout)
-      FunctionUrlConfig:
-        AuthType: NONE  # Use custom auth in function
-        Cors:
-          AllowOrigins:
-            - !Ref AllowedOrigins
-          AllowMethods:
-            - POST
-          AllowHeaders:
-            - Authorization
-            - Content-Type
-          MaxAge: 300
-          AllowCredentials: false
+          TEMPLATE_DIR: app/templates
+          PROJECT_CONFIG_PATH: config/project-setup.json
+      Events:
+        GenerateReportApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref GenerateReportApi
+            Path: /api/v1/generate-report-sync
+            Method: POST
       Tags:
         Environment: !Ref Environment
         Service: CORTAP-RPT
+
+  # API Gateway
+  GenerateReportApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Environment
+      Cors:
+        AllowOrigin: !Sub "'${AllowedOrigins}'"
+        AllowHeaders: "'Authorization,Content-Type'"
+        AllowMethods: "'POST,OPTIONS'"
+      EndpointConfiguration:
+        Type: REGIONAL
+      Auth:
+        DefaultAuthorizer: NONE
+      DefinitionBody:
+        openapi: 3.0.0
+        info:
+          title: CORTAP Report Generation API
+          version: 1.0.0
+        paths:
+          /api/v1/generate-report-sync:
+            post:
+              summary: Generate report synchronously
+              responses:
+                '200':
+                  description: Success
+              x-amazon-apigateway-integration:
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GenerateReportSyncFunction.Arn}/invocations
+                httpMethod: POST
+                type: aws_proxy
+                timeoutInMillis: 29000
 
   # CloudWatch Log Group
   GenerateReportLogGroup:
@@ -211,11 +238,11 @@ Outputs:
     Export:
       Name: !Sub ${AWS::StackName}-DocumentsBucket
 
-  GenerateReportSyncFunctionUrl:
-    Description: Lambda Function URL for synchronous generation
-    Value: !GetAtt GenerateReportSyncFunctionUrl.FunctionUrl
+  ApiGatewayUrl:
+    Description: API Gateway endpoint URL for report generation
+    Value: !Sub https://${GenerateReportApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/api/v1/generate-report-sync
     Export:
-      Name: !Sub ${AWS::StackName}-GenerateReportSyncUrl
+      Name: !Sub ${AWS::StackName}-ApiUrl
 
   GenerateReportSyncFunctionArn:
     Description: ARN of the sync generation Lambda function

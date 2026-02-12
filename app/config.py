@@ -91,6 +91,18 @@ class Settings(BaseSettings):
         description="Allowed CORS origins"
     )
 
+    # Template Configuration
+    template_dir: str = Field(
+        default="app/templates",
+        description="Directory containing Word document templates"
+    )
+
+    # Project Configuration
+    project_config_path: str = Field(
+        default="config/project-setup.json",
+        description="Path to project setup configuration JSON file"
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
