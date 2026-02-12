@@ -17,6 +17,7 @@ import json
 import asyncio
 import argparse
 from pathlib import Path
+from datetime import datetime, timedelta
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -27,6 +28,9 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+# Token cache file location
+TOKEN_CACHE_FILE = Path(__file__).parent.parent / ".riskuity_token_cache.json"
+
 
 class RiskuityAuth:
     """Handle Riskuity authentication."""
@@ -35,7 +39,48 @@ class RiskuityAuth:
         self.base_url = base_url.rstrip("/")
         self.token = None
 
-    async def get_token(self, username: str, password: str, mfa_code: str = None, skip_initial_auth: bool = False) -> str:
+    def _save_token_to_cache(self, token: str):
+        """Save token to cache file with timestamp."""
+        cache_data = {
+            "token": token,
+            "timestamp": datetime.now().isoformat(),
+            "expires_at": (datetime.now() + timedelta(hours=1)).isoformat()  # Assume 1 hour expiry
+        }
+        try:
+            with open(TOKEN_CACHE_FILE, 'w') as f:
+                json.dump(cache_data, f, indent=2)
+            print(f"💾 Token cached to: {TOKEN_CACHE_FILE}")
+        except Exception as e:
+            print(f"⚠️  Could not save token to cache: {e}")
+
+    def _load_token_from_cache(self) -> str:
+        """Load token from cache if it exists and is not expired."""
+        if not TOKEN_CACHE_FILE.exists():
+            return None
+
+        try:
+            with open(TOKEN_CACHE_FILE, 'r') as f:
+                cache_data = json.load(f)
+
+            # Check if token is expired
+            expires_at = datetime.fromisoformat(cache_data.get("expires_at", ""))
+            if datetime.now() >= expires_at:
+                print(f"⚠️  Cached token expired at {expires_at}")
+                return None
+
+            token = cache_data.get("token")
+            if token:
+                print(f"✅ Using cached token from {cache_data.get('timestamp')}")
+                print(f"   Expires at: {expires_at}")
+                return token
+
+        except Exception as e:
+            print(f"⚠️  Could not load token from cache: {e}")
+            return None
+
+        return None
+
+    async def get_token(self, username: str, password: str, mfa_code: str = None, skip_initial_auth: bool = False, use_cache: bool = True) -> str:
         """
         Authenticate and retrieve the Riskuity access token.
         Supports two-step authentication with OTP for user accounts.
@@ -44,6 +89,7 @@ class RiskuityAuth:
             username: Riskuity username (email)
             password: Riskuity password
             mfa_code: Optional MFA/2FA code (6-digit)
+            use_cache: If True, try to use cached token before authenticating
 
         Returns:
             str: Access token
@@ -51,6 +97,14 @@ class RiskuityAuth:
         Raises:
             Exception: If authentication fails
         """
+        # Try to use cached token first
+        if use_cache:
+            cached_token = self._load_token_from_cache()
+            if cached_token:
+                self.token = cached_token
+                self._decode_and_display_token(cached_token)
+                return cached_token
+
         print(f"🔐 Authenticating with Riskuity as user: {username}")
 
         # Step 1: Initial authentication with email/password (unless we already have session)
@@ -138,6 +192,7 @@ class RiskuityAuth:
                             if self.token:
                                 print(f"\n✅ Authentication complete!")
                                 self._decode_and_display_token(self.token)
+                                self._save_token_to_cache(self.token)
                                 return self.token
                             else:
                                 print(f"\n⚠️  No token found in response.")
@@ -152,12 +207,15 @@ class RiskuityAuth:
                     else:
                         # No OTP required (service account or OTP disabled)
                         print(f"✅ Authentication successful!")
+                        print(f"   Response fields: {list(token_data.keys())}")
                         self.token = token_data.get("access_token") or token_data.get("token")
 
                         if self.token:
                             self._decode_and_display_token(self.token)
+                            self._save_token_to_cache(self.token)
                             return self.token
                         else:
+                            print(f"   Full response: {json.dumps(token_data, indent=2)}")
                             raise Exception("No token in response")
 
                 else:
@@ -312,7 +370,7 @@ async def test_list_assessments(token: str, project_id: int = None):
             "https://api.riskuity.com/assessments/",
         ]
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(follow_redirects=True) as client:
         for url in urls_to_try:
             print(f"\n   Trying: {url}")
             headers = {
@@ -334,8 +392,7 @@ async def test_list_assessments(token: str, project_id: int = None):
                     return assessments
                 else:
                     print(f"   ❌ Failed: {response.status_code}")
-                    if response.status_code != 500:  # Show error for non-500s
-                        print(f"   Error: {response.text[:200]}")
+                    print(f"   Error: {response.text[:500]}")
 
             except httpx.RequestError as e:
                 print(f"   ❌ Network error: {str(e)}")
@@ -446,15 +503,27 @@ Examples:
     parser.add_argument("--project-id", type=int, help="Project ID to test with")
     parser.add_argument("--assessment-id", type=int, help="Specific assessment ID to fetch detail")
     parser.add_argument("--list-projects", action="store_true", help="List all projects")
+    parser.add_argument("--no-cache", action="store_true", help="Ignore cached token and force new authentication")
+    parser.add_argument("--clear-cache", action="store_true", help="Clear cached token and exit")
     args = parser.parse_args()
 
     print("🚀 Riskuity API Test Script")
     print("=" * 50)
 
+    # Handle cache clearing
+    if args.clear_cache:
+        if TOKEN_CACHE_FILE.exists():
+            TOKEN_CACHE_FILE.unlink()
+            print(f"✅ Cleared token cache: {TOKEN_CACHE_FILE}")
+        else:
+            print(f"⚠️  No token cache found at: {TOKEN_CACHE_FILE}")
+        return
+
     # Get credentials from command line or environment
     username = args.username or os.environ.get('RISKUITY_USERNAME', 'fedrisk_api_ci')
     password = args.password or os.environ.get('RISKUITY_PASSWORD')
     mfa_code = args.mfa_code
+    use_cache = not args.no_cache
 
     if not password:
         print("❌ Password not provided")
@@ -465,7 +534,7 @@ Examples:
     # Test authentication
     auth = RiskuityAuth()
     try:
-        token = await auth.get_token(username, password, mfa_code)
+        token = await auth.get_token(username, password, mfa_code, use_cache=use_cache)
     except Exception as e:
         print(f"❌ Authentication failed: {str(e)}")
         return
