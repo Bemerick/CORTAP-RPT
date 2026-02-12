@@ -1,0 +1,370 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://cortap-rpt.example.com/schemas/project-data-v1.0.json",
+  "title": "CORTAP Project Data Schema",
+  "description": "Canonical JSON schema for FTA compliance review project data in CORTAP-RPT system. Version 1.0.",
+  "type": "object",
+  "required": [
+    "project_id",
+    "generated_at",
+    "data_version",
+    "project",
+    "contractor",
+    "fta_program_manager",
+    "assessments",
+    "metadata"
+  ],
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "description": "Unique identifier for the project in Riskuity system",
+      "pattern": "^RSKTY-[0-9]{4}$",
+      "examples": ["RSKTY-1337", "RSKTY-1374", "RSKTY-1456"]
+    },
+    "generated_at": {
+      "type": "string",
+      "description": "ISO 8601 timestamp when this JSON was generated",
+      "format": "date-time",
+      "examples": ["2023-10-15T14:32:00Z"]
+    },
+    "data_version": {
+      "type": "string",
+      "description": "Schema version for this JSON document",
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "examples": ["1.0"],
+      "const": "1.0"
+    },
+    "project": {
+      "type": "object",
+      "description": "Core project and recipient information",
+      "required": [
+        "region_number",
+        "review_type",
+        "recipient_name",
+        "recipient_acronym",
+        "recipient_city_state",
+        "recipient_id",
+        "report_date",
+        "exit_conference_format"
+      ],
+      "properties": {
+        "region_number": {
+          "type": "integer",
+          "description": "FTA Region number (1-10)",
+          "minimum": 1,
+          "maximum": 10,
+          "examples": [1, 3]
+        },
+        "review_type": {
+          "type": "string",
+          "description": "Type of compliance review being conducted",
+          "enum": [
+            "Triennial Review",
+            "State Management Review",
+            "Combined Triennial and State Management Review",
+            "Special Review",
+            "Limited Scope Review"
+          ],
+          "examples": ["Triennial Review"]
+        },
+        "recipient_name": {
+          "type": "string",
+          "description": "Full legal name of the transit agency or recipient",
+          "minLength": 1,
+          "examples": ["Greater New Haven Transit District", "Merrimack Valley Regional Transit Authority"]
+        },
+        "recipient_acronym": {
+          "type": "string",
+          "description": "Common acronym or short name for the recipient",
+          "minLength": 1,
+          "examples": ["GNHTD", "MVRTA", "HRT"]
+        },
+        "recipient_city_state": {
+          "type": "string",
+          "description": "Primary location of the recipient (City, ST format)",
+          "pattern": "^.+, [A-Z]{2}$",
+          "examples": ["Hamden, CT", "Haverhill, MA", "Hampton, VA"]
+        },
+        "recipient_id": {
+          "type": "string",
+          "description": "FTA-assigned recipient identifier",
+          "minLength": 1,
+          "examples": ["1337", "1374", "1456"]
+        },
+        "recipient_website": {
+          "type": ["string", "null"],
+          "description": "Recipient's public website URL",
+          "examples": ["www.gnhtd.org", "www.mvrta.com", "https://gohrt.com/"]
+        },
+        "site_visit_dates": {
+          "type": "string",
+          "description": "Human-readable site visit date range or 'TBD'",
+          "examples": ["June 7, 2023", "TBD", "March 15-17, 2024"]
+        },
+        "site_visit_start_date": {
+          "type": ["string", "null"],
+          "description": "ISO 8601 date for site visit start (null if TBD)",
+          "format": "date",
+          "examples": ["2023-06-07", null]
+        },
+        "site_visit_end_date": {
+          "type": ["string", "null"],
+          "description": "ISO 8601 date for site visit end (null if TBD)",
+          "format": "date",
+          "examples": ["2023-06-07", null]
+        },
+        "report_date": {
+          "type": "string",
+          "description": "ISO 8601 date when final report is due or published",
+          "format": "date",
+          "examples": ["2023-11-30", "2023-07-15"]
+        },
+        "exit_conference_format": {
+          "type": "string",
+          "description": "Format of the exit conference",
+          "enum": ["virtual", "in-person"],
+          "examples": ["virtual", "in-person"]
+        }
+      }
+    },
+    "contractor": {
+      "type": "object",
+      "description": "Lead contractor/reviewer information",
+      "required": [
+        "lead_reviewer_name",
+        "contractor_name"
+      ],
+      "properties": {
+        "lead_reviewer_name": {
+          "type": "string",
+          "description": "Name of the lead reviewer conducting the review",
+          "minLength": 1,
+          "examples": ["Bobby Killebrew", "Ellen Harvey"]
+        },
+        "contractor_name": {
+          "type": "string",
+          "description": "Name of the contracting firm",
+          "minLength": 1,
+          "examples": ["Qi Tech, LLC", "Calyptus Consulting Group, Inc."]
+        },
+        "lead_reviewer_phone": {
+          "type": ["string", "null"],
+          "description": "Contact phone number for lead reviewer",
+          "examples": ["512-350-9912", "617-577-0042"]
+        },
+        "lead_reviewer_email": {
+          "type": ["string", "null"],
+          "description": "Contact email address for lead reviewer",
+          "format": "email",
+          "examples": ["bobby_killebrew@qitechllc.com", "eharvey@calyptusgroup.com"]
+        }
+      }
+    },
+    "fta_program_manager": {
+      "type": "object",
+      "description": "FTA Program Manager assigned to this recipient",
+      "required": [
+        "fta_program_manager_name"
+      ],
+      "properties": {
+        "fta_program_manager_name": {
+          "type": "string",
+          "description": "Name of the assigned FTA Program Manager",
+          "minLength": 1,
+          "examples": ["Syed T. Ahmed", "Jason Yucis"]
+        },
+        "fta_program_manager_title": {
+          "type": ["string", "null"],
+          "description": "Job title of the FTA Program Manager",
+          "examples": ["General Engineer", "Financial Analyst"]
+        },
+        "fta_program_manager_phone": {
+          "type": ["string", "null"],
+          "description": "Contact phone number for FTA PM",
+          "examples": ["617-494-3254", "202-366-XXXX"]
+        },
+        "fta_program_manager_email": {
+          "type": ["string", "null"],
+          "description": "Contact email address for FTA PM",
+          "format": "email",
+          "examples": ["syed.ahmed@dot.gov", "jason.yucis@dot.gov"]
+        }
+      }
+    },
+    "assessments": {
+      "type": "array",
+      "description": "Array of 23 standard FTA review areas with findings",
+      "minItems": 23,
+      "maxItems": 23,
+      "items": {
+        "type": "object",
+        "required": [
+          "review_area",
+          "finding"
+        ],
+        "properties": {
+          "review_area": {
+            "type": "string",
+            "description": "Name of the FTA review area",
+            "enum": [
+              "Legal",
+              "Financial Management and Capacity",
+              "Technical Capacity - Award Management",
+              "Technical Capacity - Program Management and Subrecipient Oversight",
+              "Technical Capacity - Project Management",
+              "Transit Asset Management",
+              "Satisfactory Continuing Control",
+              "Maintenance",
+              "Procurement",
+              "Disadvantaged Business Enterprise",
+              "Title VI",
+              "Americans with Disabilities Act (ADA) - General",
+              "Americans with Disabilities Act (ADA) - Complementary Paratransit",
+              "Equal Employment Opportunity",
+              "School Bus",
+              "Charter Bus",
+              "Drug-Free Workplace Act",
+              "Drug and Alcohol Program",
+              "Section 5307 Program Requirements",
+              "Section 5310 Program Requirements",
+              "Section 5311 Program Requirements",
+              "Public Transportation Agency Safety Plan (PTASP)",
+              "Cybersecurity"
+            ]
+          },
+          "finding": {
+            "type": "string",
+            "description": "Assessment finding code",
+            "enum": ["D", "ND", "NA"],
+            "examples": ["D", "ND", "NA"]
+          },
+          "deficiency_code": {
+            "type": ["string", "null"],
+            "description": "Unique deficiency code if finding is 'D', null otherwise",
+            "pattern": "^(D-[0-9]{4}-[0-9]{3})?$",
+            "examples": ["D-2023-001", "D-2023-002", null]
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Description of the deficiency (populated if finding is 'D')",
+            "examples": ["Subrecipient oversight procedures need enhancement", null]
+          },
+          "corrective_action": {
+            "type": ["string", "null"],
+            "description": "Required corrective action (populated if finding is 'D')",
+            "examples": ["Develop and implement enhanced subrecipient monitoring plan", null]
+          },
+          "due_date": {
+            "type": ["string", "null"],
+            "description": "ISO 8601 date when corrective action is due (if finding is 'D')",
+            "format": "date",
+            "examples": ["2024-03-31", null]
+          },
+          "date_closed": {
+            "type": ["string", "null"],
+            "description": "ISO 8601 date when deficiency was closed (null if still open)",
+            "format": "date",
+            "examples": ["2024-05-15", null]
+          }
+        }
+      }
+    },
+    "erf_items": {
+      "type": "array",
+      "description": "Enhanced Review Focus items (optional, may be empty array)",
+      "items": {
+        "type": "object",
+        "required": [
+          "erf_area",
+          "focus_description",
+          "completion_status"
+        ],
+        "properties": {
+          "erf_area": {
+            "type": "string",
+            "description": "Area of enhanced review focus",
+            "minLength": 1,
+            "examples": ["Financial Oversight", "Safety Management"]
+          },
+          "focus_description": {
+            "type": "string",
+            "description": "Description of what the enhanced focus entails",
+            "minLength": 1,
+            "examples": ["Enhanced review of grant financial reporting"]
+          },
+          "completion_status": {
+            "type": "string",
+            "description": "Current status of the ERF item",
+            "enum": ["In Progress", "Completed"],
+            "examples": ["In Progress", "Completed"]
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Derived metadata and summary information",
+      "required": [
+        "has_deficiencies",
+        "deficiency_count",
+        "deficiency_areas",
+        "erf_count",
+        "fiscal_year",
+        "review_status"
+      ],
+      "properties": {
+        "has_deficiencies": {
+          "type": "boolean",
+          "description": "True if any assessments have finding='D'",
+          "examples": [true, false]
+        },
+        "deficiency_count": {
+          "type": "integer",
+          "description": "Total number of deficiencies (count of finding='D')",
+          "minimum": 0,
+          "examples": [0, 1, 2]
+        },
+        "deficiency_areas": {
+          "type": "array",
+          "description": "List of review areas with deficiencies",
+          "items": {
+            "type": "string"
+          },
+          "examples": [
+            ["Technical Capacity - Program Management and Subrecipient Oversight"],
+            ["Financial Management and Capacity", "Transit Asset Management"],
+            []
+          ]
+        },
+        "erf_count": {
+          "type": "integer",
+          "description": "Number of Enhanced Review Focus items",
+          "minimum": 0,
+          "examples": [0, 1]
+        },
+        "reviewed_subrecipients": {
+          "type": "boolean",
+          "description": "Whether subrecipient oversight was reviewed",
+          "examples": [true, false]
+        },
+        "subrecipient_name": {
+          "type": ["string", "null"],
+          "description": "Name of subrecipient if reviewed, null otherwise",
+          "examples": ["Metro Transit", null]
+        },
+        "fiscal_year": {
+          "type": "string",
+          "description": "Fiscal year of the review",
+          "pattern": "^FY[0-9]{4}$",
+          "examples": ["FY2023", "FY2024"]
+        },
+        "review_status": {
+          "type": "string",
+          "description": "Current status of the review",
+          "enum": ["In Progress", "Completed", "Draft"],
+          "examples": ["Completed", "In Progress"]
+        }
+      }
+    }
+  }
+}
