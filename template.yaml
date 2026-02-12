@@ -1,0 +1,230 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  CORTAP-RPT Report Generation Service
+
+  Synchronous report generation with Lambda Function URL
+
+# Global configuration for all resources
+Globals:
+  Function:
+    Timeout: 120  # 2 minutes for synchronous generation
+    MemorySize: 2048
+    Runtime: python3.11
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        LOG_LEVEL: !Ref LogLevel
+        ENVIRONMENT: !Ref Environment
+        S3_BUCKET_NAME: !Ref DocumentsBucket
+        AWS_REGION: !Ref AWS::Region
+
+# Parameters for configurable values
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Environment name
+
+  LogLevel:
+    Type: String
+    Default: INFO
+    AllowedValues:
+      - DEBUG
+      - INFO
+      - WARNING
+      - ERROR
+    Description: Application log level
+
+  RiskuityApiUrl:
+    Type: String
+    Default: https://app.riskuity.com/v1
+    Description: Riskuity API base URL
+
+  AllowedOrigins:
+    Type: String
+    Default: https://app.riskuity.com
+    Description: Comma-separated list of allowed CORS origins
+
+# Resources to create
+Resources:
+  # S3 Bucket for generated documents
+  DocumentsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub cortap-documents-${Environment}-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldDocuments
+            Status: Enabled
+            ExpirationInDays: 7  # Auto-delete after 7 days
+            Prefix: generated/
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Service
+          Value: CORTAP-RPT
+
+  # S3 Bucket Policy
+  DocumentsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DocumentsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowLambdaAccess
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - s3:PutObject
+              - s3:GetObject
+            Resource: !Sub ${DocumentsBucket.Arn}/*
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+
+  # Lambda Execution Role
+  GenerateReportFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub ${DocumentsBucket.Arn}/*
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt DocumentsBucket.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Lambda Function for Synchronous Generation
+  GenerateReportSyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub cortap-generate-report-sync-${Environment}
+      Description: Synchronous report generation from Riskuity data
+      CodeUri: .
+      Handler: app.handlers.generate_sync_handler.lambda_handler
+      Role: !GetAtt GenerateReportFunctionRole.Arn
+      Timeout: 120  # 2 minutes
+      MemorySize: 2048
+      Environment:
+        Variables:
+          S3_BUCKET_NAME: !Ref DocumentsBucket
+          RISKUITY_API_URL: !Ref RiskuityApiUrl
+          ENVIRONMENT: !Ref Environment
+          LOG_LEVEL: !Ref LogLevel
+      # Lambda Function URL Configuration (bypasses API Gateway 29s timeout)
+      FunctionUrlConfig:
+        AuthType: NONE  # Use custom auth in function
+        Cors:
+          AllowOrigins:
+            - !Ref AllowedOrigins
+          AllowMethods:
+            - POST
+          AllowHeaders:
+            - Authorization
+            - Content-Type
+          MaxAge: 300
+          AllowCredentials: false
+      Tags:
+        Environment: !Ref Environment
+        Service: CORTAP-RPT
+
+  # CloudWatch Log Group
+  GenerateReportLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/cortap-generate-report-sync-${Environment}
+      RetentionInDays: 14
+
+  # CloudWatch Alarms
+  GenerateReportErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub cortap-generate-errors-${Environment}
+      AlarmDescription: Alert on generation errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300  # 5 minutes
+      EvaluationPeriods: 1
+      Threshold: 5  # Alert if 5+ errors in 5 min
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref GenerateReportSyncFunction
+
+  GenerateReportDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub cortap-generate-slow-${Environment}
+      AlarmDescription: Alert on slow generation (> 90s)
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 90000  # 90 seconds in ms
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref GenerateReportSyncFunction
+
+# Outputs
+Outputs:
+  DocumentsBucket:
+    Description: S3 bucket for generated documents
+    Value: !Ref DocumentsBucket
+    Export:
+      Name: !Sub ${AWS::StackName}-DocumentsBucket
+
+  GenerateReportSyncFunctionUrl:
+    Description: Lambda Function URL for synchronous generation
+    Value: !GetAtt GenerateReportSyncFunctionUrl.FunctionUrl
+    Export:
+      Name: !Sub ${AWS::StackName}-GenerateReportSyncUrl
+
+  GenerateReportSyncFunctionArn:
+    Description: ARN of the sync generation Lambda function
+    Value: !GetAtt GenerateReportSyncFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-GenerateReportSyncArn
+
+  GenerateReportLogGroup:
+    Description: CloudWatch Log Group for generation logs
+    Value: !Ref GenerateReportLogGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-LogGroup
