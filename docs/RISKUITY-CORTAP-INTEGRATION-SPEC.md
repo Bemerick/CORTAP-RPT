@@ -803,11 +803,593 @@ curl https://cortap-rpt.example.com/api/v1/jobs/rpt-20260211-160045-a1b2c3d4 \
 
 ---
 
+---
+
+# ALTERNATIVE APPROACH: Synchronous Integration
+
+**Version:** 1.1
+**Date:** 2026-02-12
+**Status:** Proposed (Simpler Implementation)
+
+---
+
+## Overview
+
+This section describes a **synchronous integration approach** as an alternative to the async request-response pattern described above. This approach is simpler to implement and maintain, at the cost of longer user wait times during generation.
+
+### Key Differences from Async Approach
+
+| Aspect | Async (Above) | Synchronous (This Section) |
+|--------|---------------|----------------------------|
+| **Response Time** | Immediate (< 1s) | Wait for completion (30-60s) |
+| **Complexity** | High (background jobs, webhooks, storage) | Low (single request-response) |
+| **Infrastructure** | Requires: DynamoDB, SQS/Lambda, webhook handling | Requires: Only Lambda with timeout |
+| **User Experience** | Click → job started → notification | Click → loading spinner → download |
+| **Error Handling** | Webhook retry, status polling | Immediate error response |
+| **Implementation Time** | 3-4 weeks | 1-2 weeks |
+
+### When to Use Synchronous Approach
+
+**✅ Use Synchronous if:**
+- Report generation takes < 60 seconds (typical case: 30-45s)
+- Simpler architecture is preferred
+- Faster time-to-market is critical
+- Webhook infrastructure is complex/not desired
+- User can wait with loading indicator
+
+**❌ Avoid Synchronous if:**
+- Report generation takes > 2 minutes
+- Large reports with extensive data (> 1000 assessments)
+- Need to support concurrent generation for same user
+- API Gateway timeout constraints (29s) cannot be worked around
+
+---
+
+## Synchronous Architecture Diagram
+
+```
+┌─────────────┐                 ┌──────────────┐                ┌─────────┐
+│  Riskuity   │                 │  CORTAP-RPT  │                │   S3    │
+│   WebApp    │                 │   Service    │                │ Storage │
+└──────┬──────┘                 └──────┬───────┘                └────┬────┘
+       │                               │                             │
+       │ 1. User clicks "Generate"     │                             │
+       ├──────────────────────────────>│                             │
+       │ POST /api/v1/generate-report  │                             │
+       │ Authorization: Bearer <token> │                             │
+       │                               │                             │
+       │     (Wait 30-60 seconds)      │ 2. Fetch data (user token) │
+       │                               │ 3. Validate data            │
+       │                               │ 4. Generate Word doc        │
+       │                               │                             │
+       │                               ├────────────────────────────>│
+       │                               │ 5. Upload DOCX to S3        │
+       │                               │<────────────────────────────┤
+       │                               │ 6. Get presigned URL        │
+       │                               │    (24-hour expiry)         │
+       │                               │                             │
+       │<──────────────────────────────┤                             │
+       │ 7. Complete Response          │                             │
+       │ { "download_url": "...",      │                             │
+       │   "report_id": "...",         │                             │
+       │   "generated_at": "..." }     │                             │
+       │                               │                             │
+       │ 8. Browser auto-downloads     │                             │
+       ├───────────────────────────────┼────────────────────────────>│
+       │ GET presigned URL             │                             │
+       │<────────────────────────────────────────────────────────────┤
+       │ File downloaded               │                             │
+```
+
+**Timeline:**
+- **0-2s**: Request validation, auth check
+- **2-30s**: Fetch project data from Riskuity
+- **30-45s**: Transform data, generate Word document
+- **45-50s**: Upload to S3, generate presigned URL
+- **50-52s**: Return response with download URL
+- **52-55s**: Browser auto-downloads file
+
+---
+
+## API Specification (Synchronous)
+
+### Generate Report Endpoint (Synchronous)
+
+**Endpoint:** `POST /api/v1/generate-report-sync`
+
+**Request:**
+```http
+POST /api/v1/generate-report-sync HTTP/1.1
+Host: cortap-rpt.example.com
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Content-Type: application/json
+
+{
+  "project_id": 33,
+  "report_type": "draft_audit_report"
+}
+```
+
+**Request Fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `project_id` | integer | Yes | Riskuity project identifier |
+| `report_type` | string | Yes | `draft_audit_report` or `recipient_information_request` |
+
+**Response (Success - 200 OK):**
+```json
+{
+  "status": "completed",
+  "report_id": "rpt-20260212-141530-x7y8z9",
+  "project_id": 33,
+  "report_type": "draft_audit_report",
+  "download_url": "https://s3-govcloud.amazonaws.com/cortap-docs/...",
+  "expires_at": "2026-02-13T14:15:00Z",
+  "generated_at": "2026-02-12T14:15:30Z",
+  "file_size_bytes": 524288,
+  "metadata": {
+    "recipient_name": "Greater Portland Transit District",
+    "review_type": "Triennial Review",
+    "review_areas": 21,
+    "deficiency_count": 2,
+    "generation_time_ms": 48523
+  }
+}
+```
+
+**Response Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | string | Always "completed" (synchronous) |
+| `report_id` | string | Unique report identifier |
+| `project_id` | integer | Echo of request project_id |
+| `report_type` | string | Echo of request report_type |
+| `download_url` | string | Presigned S3 URL (24-hour expiry) |
+| `expires_at` | string | ISO 8601 timestamp when URL expires |
+| `generated_at` | string | ISO 8601 timestamp when report generated |
+| `file_size_bytes` | integer | Size of generated file |
+| `metadata` | object | Report metadata for display |
+
+**Error Responses:**
+
+| Status Code | Error Code | Description |
+|-------------|------------|-------------|
+| 400 | `invalid_project_id` | Project ID not found or invalid |
+| 400 | `invalid_report_type` | Report type not supported |
+| 400 | `missing_required_data` | Critical data missing for generation |
+| 401 | `authentication_failed` | Invalid or expired token |
+| 403 | `insufficient_permissions` | User lacks access to project |
+| 500 | `generation_failed` | Document generation error |
+| 502 | `riskuity_api_error` | Riskuity API unavailable |
+| 504 | `timeout` | Generation exceeded timeout (2 min) |
+
+**Error Response Format:**
+```json
+{
+  "error": "missing_required_data",
+  "message": "Cannot generate report: missing recipient contact information",
+  "details": {
+    "missing_fields": ["recipient_contact_name", "recipient_contact_email"],
+    "template": "draft_audit_report"
+  },
+  "timestamp": "2026-02-12T14:15:30Z",
+  "correlation_id": "gen-x7y8z9"
+}
+```
+
+---
+
+## Implementation Details (Synchronous)
+
+### 1. Timeout Considerations
+
+**API Gateway Timeout Limits:**
+- API Gateway: **29 seconds max**
+- Lambda (standard): **15 minutes max**
+- Lambda (with Function URL): **15 minutes max**
+
+**Solution: Use Lambda Function URL (not API Gateway)**
+
+```yaml
+# SAM template excerpt
+GenerateReportSyncFunction:
+  Type: AWS::Serverless::Function
+  Properties:
+    Handler: app.handlers.generate_report_sync.handler
+    Timeout: 120  # 2 minutes
+    MemorySize: 2048
+    FunctionUrlConfig:
+      AuthType: AWS_IAM  # Or NONE with custom auth
+      Cors:
+        AllowOrigins:
+          - https://app.riskuity.com
+        AllowMethods:
+          - POST
+        AllowHeaders:
+          - Authorization
+          - Content-Type
+```
+
+**Why Lambda Function URL:**
+- ✅ No 29s API Gateway limit
+- ✅ Supports up to 15-minute execution
+- ✅ Direct invocation (lower latency)
+- ✅ Built-in CORS support
+- ✅ Simpler configuration
+
+### 2. Progress Indication (Client-Side)
+
+Since generation is synchronous, provide clear user feedback:
+
+**Riskuity Frontend Example:**
+```javascript
+async function generateReport(projectId) {
+  // Show loading modal
+  const modal = showLoadingModal({
+    title: "Generating Report",
+    message: "Fetching project data from Riskuity...",
+    estimatedTime: "30-60 seconds"
+  });
+
+  try {
+    // Start generation
+    const response = await fetch(
+      'https://cortap-rpt.example.com/api/v1/generate-report-sync',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${getUserToken()}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          project_id: projectId,
+          report_type: 'draft_audit_report'
+        }),
+        // Important: Set timeout longer than expected
+        signal: AbortSignal.timeout(120000) // 2 min timeout
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message);
+    }
+
+    const result = await response.json();
+
+    // Close loading modal
+    modal.close();
+
+    // Auto-download or show download link
+    if (result.download_url) {
+      // Option 1: Auto-download
+      window.location.href = result.download_url;
+
+      // Option 2: Show success with download button
+      showSuccessModal({
+        title: "Report Generated Successfully",
+        message: `${result.metadata.recipient_name} - ${result.report_type}`,
+        downloadUrl: result.download_url,
+        expiresAt: result.expires_at
+      });
+    }
+
+  } catch (error) {
+    modal.close();
+    showErrorModal({
+      title: "Generation Failed",
+      message: error.message,
+      retryAction: () => generateReport(projectId)
+    });
+  }
+}
+```
+
+### 3. Backend Implementation (Synchronous)
+
+**FastAPI Endpoint:**
+```python
+from fastapi import APIRouter, HTTPException, Header
+from pydantic import BaseModel
+from datetime import datetime, timedelta
+import uuid
+
+from app.services.riskuity_client import RiskuityClient
+from app.services.data_transformer import DataTransformer
+from app.services.document_generator import DocumentGenerator
+from app.services.s3_storage import S3Storage
+from app.services.validator import JsonValidator
+
+router = APIRouter()
+
+
+class GenerateReportRequest(BaseModel):
+    project_id: int
+    report_type: str  # "draft_audit_report" or "recipient_information_request"
+
+
+class ReportMetadata(BaseModel):
+    recipient_name: str
+    review_type: str
+    review_areas: int
+    deficiency_count: int
+    generation_time_ms: int
+
+
+class GenerateReportResponse(BaseModel):
+    status: str
+    report_id: str
+    project_id: int
+    report_type: str
+    download_url: str
+    expires_at: str
+    generated_at: str
+    file_size_bytes: int
+    metadata: ReportMetadata
+
+
+@router.post(
+    "/generate-report-sync",
+    response_model=GenerateReportResponse,
+    summary="Generate Report (Synchronous)",
+    description="Generate CORTAP report synchronously. Returns when complete (30-60s)."
+)
+async def generate_report_sync(
+    request: GenerateReportRequest,
+    authorization: str = Header(...)
+) -> GenerateReportResponse:
+    """
+    Generate CORTAP report synchronously.
+
+    This endpoint blocks until report generation is complete, then returns
+    the download URL. Typical execution time: 30-60 seconds.
+
+    Args:
+        request: Report generation request
+        authorization: Bearer token from Riskuity
+
+    Returns:
+        GenerateReportResponse with download URL
+
+    Raises:
+        HTTPException: On validation, generation, or API errors
+    """
+    start_time = datetime.utcnow()
+    report_id = f"rpt-{start_time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}"
+
+    # Extract token from Authorization header
+    token = authorization.replace("Bearer ", "")
+
+    try:
+        # Step 1: Initialize services
+        riskuity_client = RiskuityClient(
+            base_url="https://api.riskuity.com",
+            api_key=token  # Pass user token
+        )
+        transformer = DataTransformer()
+        validator = JsonValidator()
+        generator = DocumentGenerator()
+        s3_storage = S3Storage()
+
+        # Step 2: Fetch project data from Riskuity (10-20s)
+        project_data = await riskuity_client.get_project(request.project_id)
+        project_controls = await riskuity_client.get_project_controls(request.project_id)
+
+        # Step 3: Transform to canonical JSON (1-2s)
+        canonical_json = await transformer.transform(
+            project=project_data,
+            controls=project_controls
+        )
+
+        # Step 4: Validate data (1s)
+        validation_result = await validator.validate_json_schema(canonical_json)
+        if not validation_result.valid:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "invalid_data",
+                    "message": "Project data validation failed",
+                    "errors": validation_result.errors
+                }
+            )
+
+        # Step 5: Check completeness
+        completeness = await validator.check_completeness(
+            canonical_json,
+            template_id=request.report_type
+        )
+        if not completeness.can_generate:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "missing_required_data",
+                    "message": "Cannot generate report: missing critical fields",
+                    "missing_fields": completeness.missing_critical_fields
+                }
+            )
+
+        # Step 6: Generate document (10-20s)
+        document_bytes = await generator.generate(
+            template_id=request.report_type,
+            data=canonical_json
+        )
+
+        # Step 7: Upload to S3 (2-5s)
+        filename = f"{report_id}_{request.report_type}.docx"
+        s3_key = await s3_storage.upload_document(
+            file_content=document_bytes,
+            project_id=str(request.project_id),
+            template_id=request.report_type,
+            filename=filename
+        )
+
+        # Step 8: Generate presigned URL (24-hour expiry)
+        download_url = await s3_storage.generate_presigned_url(
+            s3_key=s3_key,
+            expiration=86400  # 24 hours
+        )
+
+        # Calculate generation time
+        generation_time_ms = int(
+            (datetime.utcnow() - start_time).total_seconds() * 1000
+        )
+
+        # Build response
+        return GenerateReportResponse(
+            status="completed",
+            report_id=report_id,
+            project_id=request.project_id,
+            report_type=request.report_type,
+            download_url=download_url,
+            expires_at=(datetime.utcnow() + timedelta(hours=24)).isoformat() + "Z",
+            generated_at=datetime.utcnow().isoformat() + "Z",
+            file_size_bytes=len(document_bytes),
+            metadata=ReportMetadata(
+                recipient_name=canonical_json["project"]["recipient_name"],
+                review_type=canonical_json["project"]["review_type"],
+                review_areas=len(canonical_json["assessments"]),
+                deficiency_count=canonical_json["metadata"]["deficiency_count"],
+                generation_time_ms=generation_time_ms
+            )
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "generation_failed",
+                "message": str(e),
+                "report_id": report_id
+            }
+        )
+```
+
+### 4. Performance Optimization
+
+**To keep synchronous generation under 60 seconds:**
+
+1. **Cache Riskuity Data** (if token reused):
+   ```python
+   # Add caching layer
+   @functools.lru_cache(maxsize=100)
+   async def get_cached_project_data(project_id: int, token: str):
+       # Cache for 5 minutes
+       pass
+   ```
+
+2. **Parallel Data Fetching**:
+   ```python
+   # Fetch multiple endpoints in parallel
+   results = await asyncio.gather(
+       riskuity_client.get_project(project_id),
+       riskuity_client.get_project_controls(project_id),
+       # Other endpoints...
+   )
+   ```
+
+3. **Pre-warm Lambda Instances**:
+   ```yaml
+   # SAM template
+   ProvisionedConcurrencyConfig:
+     ProvisionedConcurrentExecutions: 2  # Keep 2 warm
+   ```
+
+4. **Optimize Document Generation**:
+   - Keep template in memory
+   - Reuse docx template objects
+   - Minimize disk I/O
+
+**Typical Performance Profile:**
+```
+┌─────────────────────────┬──────────┬────────────┐
+│ Step                    │ Time (s) │ % of Total │
+├─────────────────────────┼──────────┼────────────┤
+│ Request validation      │ 0.5      │ 1%         │
+│ Fetch Riskuity data     │ 15-25    │ 45%        │
+│ Data transformation     │ 2-3      │ 6%         │
+│ Data validation         │ 1        │ 2%         │
+│ Document generation     │ 10-15    │ 30%        │
+│ S3 upload               │ 3-5      │ 10%        │
+│ Response preparation    │ 0.5      │ 1%         │
+├─────────────────────────┼──────────┼────────────┤
+│ TOTAL                   │ 32-50s   │ 100%       │
+└─────────────────────────┴──────────┴────────────┘
+```
+
+---
+
+## Comparison: Async vs Synchronous
+
+### Async (Original Design)
+
+**Pros:**
+- ✅ Immediate response to user (< 1s)
+- ✅ No API Gateway timeout concerns
+- ✅ Better for long-running operations (> 2 min)
+- ✅ Supports queueing and rate limiting
+- ✅ Can show real-time progress updates
+
+**Cons:**
+- ❌ Complex architecture (DynamoDB, SQS, webhooks)
+- ❌ Webhook reliability concerns (retries, failures)
+- ❌ User must wait for notification
+- ❌ More infrastructure to maintain
+- ❌ Longer implementation time (3-4 weeks)
+
+### Synchronous (This Section)
+
+**Pros:**
+- ✅ Simpler architecture (just Lambda + S3)
+- ✅ Immediate download after generation
+- ✅ Easier to debug and monitor
+- ✅ No webhook infrastructure needed
+- ✅ Faster implementation (1-2 weeks)
+- ✅ Better UX for fast reports (< 60s)
+
+**Cons:**
+- ❌ User must wait during generation (30-60s)
+- ❌ Requires Lambda Function URL (not API Gateway)
+- ❌ Risk of timeout for slow operations
+- ❌ Single request-response (no queueing)
+- ❌ Harder to show granular progress
+
+---
+
+## Recommendation
+
+**For MVP/Phase 1: Use Synchronous Approach**
+
+**Rationale:**
+1. ✅ Typical report generation: 30-50 seconds (well under 2-min limit)
+2. ✅ Simpler to implement and maintain
+3. ✅ Faster time-to-market (1-2 weeks vs 3-4 weeks)
+4. ✅ Better user experience (immediate download)
+5. ✅ Easier to troubleshoot issues
+
+**For Future/Phase 2: Consider Async if:**
+- Report generation consistently exceeds 90 seconds
+- Large reports with extensive data become common
+- Need to support batch generation
+- Require sophisticated progress tracking
+
+**Migration Path:**
+- Start with synchronous endpoint: `/api/v1/generate-report-sync`
+- Add async endpoint later: `/api/v1/generate-report-async`
+- Client chooses based on report size/complexity
+- Shared backend logic (just different response handling)
+
+---
+
 ## Revision History
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0 | 2026-02-11 | System Architect | Initial specification |
+| 1.0 | 2026-02-11 | System Architect | Initial specification (async) |
+| 1.1 | 2026-02-12 | System Architect | Added synchronous integration section |
 
 ---
 
