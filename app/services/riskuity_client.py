@@ -77,7 +77,8 @@ class RiskuityClient:
         self,
         method: str,
         endpoint: str,
-        correlation_id: Optional[str] = None
+        correlation_id: Optional[str] = None,
+        params: Optional[Dict] = None
     ) -> Dict:
         """
         Make HTTP request with exponential backoff retry logic.
@@ -86,6 +87,7 @@ class RiskuityClient:
             method: HTTP method (GET, POST, etc.)
             endpoint: API endpoint path (without base_url)
             correlation_id: Optional correlation ID for request tracing
+            params: Optional query parameters (for GET requests)
 
         Returns:
             dict: Parsed JSON response
@@ -118,6 +120,7 @@ class RiskuityClient:
                     method=method,
                     url=url,
                     headers=headers,
+                    params=params,
                     timeout=self.timeout
                 )
 
@@ -447,3 +450,103 @@ class RiskuityClient:
         )
 
         return detailed_assessments
+
+    async def get_project_controls(
+        self,
+        project_id: int,
+        limit: int = 1000,
+        offset: int = 0,
+        correlation_id: Optional[str] = None
+    ) -> List[Dict]:
+        """
+        Fetch project controls (with embedded assessments) for a project.
+
+        **This is the recommended endpoint for FY26 CORTAP projects.**
+
+        Actual Riskuity API Endpoint: GET /projects/project_controls/{project_id}?limit={limit}&offset={offset}
+
+        Returns paginated list of project_control objects, each containing:
+        - control: Control definition with name, description
+        - assessment: Embedded assessment data (status, comments, findings)
+        - project: Project information
+        - control_status, control_phase, etc.
+
+        For FY26 projects, this typically returns 494-708 controls with assessments.
+
+        Args:
+            project_id: Riskuity project identifier (integer)
+            limit: Maximum number of controls to return (default: 1000, covers most projects)
+            offset: Pagination offset (default: 0)
+            correlation_id: Optional correlation ID for request tracing
+
+        Returns:
+            list: Array of project_control objects with embedded assessments
+
+        Raises:
+            RiskuityAPIError: If API request fails
+
+        Example response structure:
+            {
+                "items": [
+                    {
+                        "id": "4311",
+                        "control": {
+                            "id": "4870",
+                            "name": "LEGAL : L2",
+                            "description": "...",
+                        },
+                        "assessment": {
+                            "id": "4572",
+                            "status": "Complete",
+                            "comments": "...",
+                        },
+                        "project": {...},
+                        ...
+                    },
+                    ...
+                ],
+                "total": 494,
+                "offset": 0,
+                "limit": 1000
+            }
+        """
+        endpoint = f"/projects/project_controls/{project_id}"
+        params = {"limit": limit, "offset": offset}
+
+        logger.info(
+            f"Fetching project controls from Riskuity",
+            extra={
+                "project_id": project_id,
+                "limit": limit,
+                "offset": offset,
+                "correlation_id": correlation_id
+            }
+        )
+
+        data = await self._request_with_retry("GET", endpoint, correlation_id, params)
+
+        # Extract items from paginated response
+        if isinstance(data, dict):
+            items = data.get("items", [])
+            total = data.get("total", len(items))
+
+            logger.info(
+                f"Successfully fetched {len(items)} of {total} project controls",
+                extra={
+                    "project_id": project_id,
+                    "returned": len(items),
+                    "total": total,
+                    "correlation_id": correlation_id
+                }
+            )
+
+            return items
+        elif isinstance(data, list):
+            # In case API returns list directly
+            return data
+        else:
+            logger.warning(
+                f"Unexpected response format from project_controls endpoint",
+                extra={"data_type": type(data), "correlation_id": correlation_id}
+            )
+            return []

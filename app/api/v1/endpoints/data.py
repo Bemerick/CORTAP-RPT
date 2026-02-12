@@ -10,11 +10,20 @@ from typing import Optional
 from datetime import datetime
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Body
 from fastapi.responses import JSONResponse
 
 from app.services.data_service import DataService
 from app.services.s3_storage import S3Storage
+from app.services.validator import JsonValidator
+from app.models.data_service_models import (
+    FetchDataRequest,
+    DataServiceResponse,
+    RefreshDataResponse,
+    InvalidateCacheResponse,
+    CacheMetadata,
+    ValidationSummary
+)
 from app.exceptions import RiskuityAPIError, ValidationError, S3StorageError, CORTAPError
 from app.utils.logging import get_logger
 from app.config import settings
@@ -26,6 +35,7 @@ router = APIRouter()
 # Singleton instances (in production, use dependency injection)
 _http_client = None
 _data_service = None
+_validator = None
 
 
 def get_http_client() -> httpx.AsyncClient:
@@ -39,6 +49,19 @@ def get_http_client() -> httpx.AsyncClient:
     if _http_client is None:
         _http_client = httpx.AsyncClient(timeout=30.0)
     return _http_client
+
+
+def get_validator() -> JsonValidator:
+    """
+    Get or create JsonValidator instance.
+
+    Returns:
+        JsonValidator: Singleton validator instance
+    """
+    global _validator
+    if _validator is None:
+        _validator = JsonValidator()
+    return _validator
 
 
 def get_data_service() -> DataService:
@@ -59,7 +82,8 @@ def get_data_service() -> DataService:
             riskuity_api_key=riskuity_api_key,
             http_client=get_http_client(),
             s3_storage=S3Storage(),
-            cache_ttl_seconds=3600  # 1 hour cache
+            cache_ttl_seconds=settings.cache_ttl_seconds,
+            enable_caching=settings.enable_caching
         )
 
     return _data_service
@@ -251,7 +275,204 @@ async def get_project_data(
 
 
 @router.post(
-    "/projects/{project_id}/data",
+    "/projects/{project_id}/data/fetch",
+    summary="Fetch Project Data with Validation",
+    description="""
+    Fetch project data with optional validation and completeness checking.
+
+    This endpoint provides enhanced data fetching with:
+    - Schema validation
+    - Completeness checking for specific templates
+    - Structured response with cache metadata
+
+    Use this for document generation workflows that need validation.
+    """,
+    response_model=DataServiceResponse,
+    responses={
+        200: {
+            "description": "Project data fetched successfully with validation"
+        },
+        400: {
+            "description": "Validation failed - critical fields missing"
+        },
+        500: {
+            "description": "Riskuity API error or internal error"
+        }
+    }
+)
+async def fetch_project_data_with_validation(
+    project_id: int,
+    request: FetchDataRequest = Body(default=FetchDataRequest()),
+    correlation_id: Optional[str] = Query(None, description="Optional correlation ID for tracing")
+) -> DataServiceResponse:
+    """
+    Fetch project data with validation and completeness checking.
+
+    Args:
+        project_id: Riskuity project identifier
+        request: Fetch request parameters
+        correlation_id: Optional correlation ID for tracing
+
+    Returns:
+        DataServiceResponse: Enhanced response with validation results
+    """
+    if not correlation_id:
+        correlation_id = f"fetch-validated-{uuid.uuid4()}"
+
+    logger.info(
+        f"POST /projects/{project_id}/data/fetch",
+        extra={
+            "project_id": project_id,
+            "force_refresh": request.force_refresh,
+            "include_validation": request.include_validation,
+            "template_id": request.template_id,
+            "correlation_id": correlation_id
+        }
+    )
+
+    try:
+        data_service = get_data_service()
+        validator = get_validator()
+
+        # Fetch project data
+        project_data = await data_service.get_project_data(
+            project_id=project_id,
+            force_refresh=request.force_refresh,
+            correlation_id=correlation_id
+        )
+
+        # Extract cache metadata
+        cache_meta = project_data.get("_cache_metadata", {})
+        cache_metadata = CacheMetadata(
+            cached=cache_meta.get("cached", False),
+            cache_age_seconds=cache_meta.get("cache_age_seconds", 0),
+            expires_at=cache_meta.get("expires_at"),
+            cache_miss_reason=cache_meta.get("cache_miss_reason")
+        )
+
+        # Run validation if requested
+        validation_summary = None
+        if request.include_validation:
+            validation_result = await validator.validate_json_schema(project_data)
+            validation_summary = ValidationSummary(
+                schema_valid=validation_result.valid,
+                error_count=len(validation_result.errors),
+                warning_count=len(validation_result.warnings),
+                errors=validation_result.errors[:10],  # Limit to 10
+                warnings=validation_result.warnings
+            )
+
+            logger.info(
+                "Validation complete",
+                extra={
+                    "project_id": project_id,
+                    "schema_valid": validation_result.valid,
+                    "error_count": len(validation_result.errors),
+                    "correlation_id": correlation_id
+                }
+            )
+
+        # Run completeness check if template specified
+        completeness_result = None
+        if request.template_id:
+            completeness_result = await validator.check_completeness(
+                project_data,
+                template_id=request.template_id
+            )
+
+            logger.info(
+                "Completeness check complete",
+                extra={
+                    "project_id": project_id,
+                    "template_id": request.template_id,
+                    "can_generate": completeness_result.can_generate,
+                    "quality_score": completeness_result.data_quality_score,
+                    "correlation_id": correlation_id
+                }
+            )
+
+            # If completeness fails, return 400
+            if not completeness_result.can_generate:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "completeness_check_failed",
+                        "message": f"Missing {len(completeness_result.missing_critical_fields)} critical fields",
+                        "missing_critical_fields": completeness_result.missing_critical_fields,
+                        "template_id": request.template_id,
+                        "correlation_id": correlation_id
+                    }
+                )
+
+        # Build response
+        response = DataServiceResponse(
+            project_id=str(project_id),
+            generated_at=project_data.get("generated_at", datetime.utcnow().isoformat() + "Z"),
+            data_version=project_data.get("data_version", "1.0"),
+            cached=cache_metadata.cached,
+            cache=cache_metadata,
+            validation=validation_summary,
+            completeness=completeness_result,
+            data=project_data,
+            correlation_id=correlation_id
+        )
+
+        logger.info(
+            f"Successfully fetched and validated project data for {project_id}",
+            extra={
+                "project_id": project_id,
+                "cached": cache_metadata.cached,
+                "schema_valid": validation_summary.schema_valid if validation_summary else None,
+                "can_generate": completeness_result.can_generate if completeness_result else None,
+                "correlation_id": correlation_id
+            }
+        )
+
+        return response
+
+    except HTTPException:
+        raise
+    except RiskuityAPIError as e:
+        logger.error(
+            f"Riskuity API error for project {project_id}",
+            extra={
+                "project_id": project_id,
+                "error": str(e),
+                "correlation_id": correlation_id
+            },
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "error": "riskuity_api_error",
+                "message": str(e),
+                "error_code": e.error_code,
+                "correlation_id": correlation_id
+            }
+        )
+    except Exception as e:
+        logger.error(
+            f"Unexpected error fetching project data for {project_id}",
+            extra={
+                "project_id": project_id,
+                "error": str(e),
+                "correlation_id": correlation_id
+            },
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "internal_server_error",
+                "message": str(e),
+                "correlation_id": correlation_id
+            }
+        )
+
+
+@router.post(
+    "/projects/{project_id}/data/refresh",
     summary="Refresh Project Data",
     description="""
     Force refresh of project data from Riskuity and update cache.
@@ -270,6 +491,7 @@ async def get_project_data(
 
     **Note:** This operation can take 30-60 seconds for large projects (644 assessments).
     """,
+    response_model=RefreshDataResponse,
     responses={
         200: {
             "description": "Project data refreshed successfully"
@@ -282,7 +504,7 @@ async def get_project_data(
 async def refresh_project_data(
     project_id: int,
     correlation_id: Optional[str] = Query(None, description="Optional correlation ID for tracing")
-):
+) -> RefreshDataResponse:
     """
     Force refresh project data from Riskuity.
 
@@ -291,14 +513,14 @@ async def refresh_project_data(
         correlation_id: Optional correlation ID for tracing
 
     Returns:
-        JSONResponse: Refreshed canonical JSON schema
+        RefreshDataResponse: Refresh status and metadata
     """
     # Generate correlation ID if not provided
     if not correlation_id:
         correlation_id = f"refresh-{uuid.uuid4()}"
 
     logger.info(
-        f"POST /projects/{project_id}/data (refresh)",
+        f"POST /projects/{project_id}/data/refresh",
         extra={
             "project_id": project_id,
             "correlation_id": correlation_id,
@@ -319,23 +541,24 @@ async def refresh_project_data(
             correlation_id=correlation_id
         )
 
+        review_areas = len(project_data.get("assessments", []))
+
         logger.info(
             f"Successfully refreshed project data for {project_id}",
             extra={
                 "project_id": project_id,
-                "review_areas": len(project_data.get("assessments", [])),
+                "review_areas": review_areas,
                 "correlation_id": correlation_id
             }
         )
 
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "success",
-                "message": f"Project data refreshed for project {project_id}",
-                "data": project_data,
-                "correlation_id": correlation_id
-            }
+        return RefreshDataResponse(
+            status="success",
+            message=f"Project data refreshed for project {project_id}",
+            project_id=str(project_id),
+            refreshed_at=datetime.utcnow().isoformat() + "Z",
+            review_areas=review_areas,
+            correlation_id=correlation_id
         )
 
     except Exception as e:
@@ -367,6 +590,7 @@ async def refresh_project_data(
     Use this to clear the cache without fetching new data.
     Next GET request will fetch fresh data from Riskuity.
     """,
+    response_model=InvalidateCacheResponse,
     responses={
         200: {
             "description": "Cache invalidated successfully"
@@ -379,7 +603,7 @@ async def refresh_project_data(
 async def invalidate_project_cache(
     project_id: int,
     correlation_id: Optional[str] = Query(None, description="Optional correlation ID for tracing")
-):
+) -> InvalidateCacheResponse:
     """
     Invalidate cached project data.
 
@@ -388,7 +612,7 @@ async def invalidate_project_cache(
         correlation_id: Optional correlation ID for tracing
 
     Returns:
-        JSONResponse: Status of cache invalidation
+        InvalidateCacheResponse: Status of cache invalidation
     """
     if not correlation_id:
         correlation_id = f"invalidate-{uuid.uuid4()}"
@@ -407,22 +631,18 @@ async def invalidate_project_cache(
         success = await data_service.invalidate_cache(project_id, correlation_id)
 
         if success:
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "status": "success",
-                    "message": f"Cache invalidated for project {project_id}",
-                    "correlation_id": correlation_id
-                }
+            return InvalidateCacheResponse(
+                status="success",
+                message=f"Cache invalidated for project {project_id}",
+                project_id=str(project_id),
+                correlation_id=correlation_id
             )
         else:
-            return JSONResponse(
-                status_code=404,
-                content={
-                    "status": "not_found",
-                    "message": f"No cached data found for project {project_id}",
-                    "correlation_id": correlation_id
-                }
+            return InvalidateCacheResponse(
+                status="not_found",
+                message=f"No cached data found for project {project_id}",
+                project_id=str(project_id),
+                correlation_id=correlation_id
             )
 
     except Exception as e:

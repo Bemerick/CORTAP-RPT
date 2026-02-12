@@ -55,6 +55,16 @@ class Settings(BaseSettings):
         description="JSON data cache TTL in hours (default: 1 hour)"
     )
 
+    # Cache Configuration
+    cache_ttl_seconds: int = Field(
+        default=3600,
+        description="Cache time-to-live in seconds (default: 3600 = 1 hour)"
+    )
+    enable_caching: bool = Field(
+        default=True,
+        description="Enable/disable caching (default: True)"
+    )
+
     # Application Configuration
     log_level: str = Field(
         default="INFO",

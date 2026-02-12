@@ -61,7 +61,8 @@ class DataService:
         riskuity_api_key: str,
         http_client: httpx.AsyncClient,
         s3_storage: Optional[S3Storage] = None,
-        cache_ttl_seconds: int = 3600
+        cache_ttl_seconds: int = 3600,
+        enable_caching: bool = True
     ):
         """
         Initialize DataService.
@@ -72,6 +73,7 @@ class DataService:
             http_client: httpx AsyncClient for HTTP requests
             s3_storage: Optional S3Storage instance (creates new if not provided)
             cache_ttl_seconds: Cache time-to-live in seconds (default: 1 hour)
+            enable_caching: Enable/disable caching (default: True)
         """
         self.riskuity_client = RiskuityClient(
             base_url=riskuity_base_url,
@@ -81,12 +83,14 @@ class DataService:
         self.transformer = DataTransformer()
         self.s3_storage = s3_storage or S3Storage()
         self.cache_ttl_seconds = cache_ttl_seconds
+        self.enable_caching = enable_caching
 
         logger.info(
             "DataService initialized",
             extra={
                 "riskuity_base_url": riskuity_base_url,
-                "cache_ttl_seconds": cache_ttl_seconds
+                "cache_ttl_seconds": cache_ttl_seconds,
+                "enable_caching": enable_caching
             }
         )
 
@@ -129,24 +133,40 @@ class DataService:
             }
         )
 
-        # Step 1: Check cache (unless force_refresh)
-        if not force_refresh:
+        # Step 1: Check cache (unless force_refresh or caching disabled)
+        if not force_refresh and self.enable_caching:
             cached_data = await self._get_cached_data(project_id, correlation_id)
             if cached_data:
+                # Add cache metadata to response
+                cache_age_seconds = cached_data.get("_cache_age_seconds", 0)
+                cached_data["_cache_metadata"] = {
+                    "cached": True,
+                    "cache_age_seconds": cache_age_seconds,
+                    "expires_at": cached_data.get("_metadata", {}).get("expires_at"),
+                    "cache_miss_reason": None
+                }
+
                 logger.info(
                     f"Returning cached data for project {project_id}",
                     extra={
                         "project_id": project_id,
-                        "cache_age_seconds": cached_data.get("_cache_age_seconds"),
+                        "cache_age_seconds": cache_age_seconds,
                         "correlation_id": correlation_id
                     }
                 )
                 return cached_data
 
         # Step 2: Fetch fresh data from Riskuity
+        # Determine cache miss reason
+        cache_miss_reason = "force_refresh" if force_refresh else ("caching_disabled" if not self.enable_caching else "cache_miss_or_expired")
+
         logger.info(
             f"Fetching fresh data from Riskuity for project {project_id}",
-            extra={"project_id": project_id, "correlation_id": correlation_id}
+            extra={
+                "project_id": project_id,
+                "cache_miss_reason": cache_miss_reason,
+                "correlation_id": correlation_id
+            }
         )
 
         canonical_data = await self.fetch_and_transform(
@@ -155,8 +175,17 @@ class DataService:
             correlation_id=correlation_id
         )
 
-        # Step 3: Cache in S3
-        await self._cache_data(project_id, canonical_data, correlation_id)
+        # Add cache metadata to fresh data
+        canonical_data["_cache_metadata"] = {
+            "cached": False,
+            "cache_age_seconds": 0,
+            "expires_at": None,
+            "cache_miss_reason": cache_miss_reason
+        }
+
+        # Step 3: Cache in S3 (if caching enabled)
+        if self.enable_caching:
+            await self._cache_data(project_id, canonical_data, correlation_id)
 
         return canonical_data
 

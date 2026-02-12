@@ -1,12 +1,22 @@
 """
 Data Transformer - Converts Riskuity API responses to canonical JSON schema.
 
-Transforms data from 4 Riskuity endpoints into the standardized project data schema
-used by all document templates, with derived fields and metadata calculation.
+Transforms data from Riskuity project_controls endpoint into the standardized
+project data schema used by all document templates, with derived fields and metadata calculation.
 """
 
 from typing import Dict, List, Optional, Any
 from datetime import datetime
+import sys
+from pathlib import Path
+
+# Add src/ to path to import mapping module
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
+from services.riskuity_control_mapping import (
+    map_to_json_review_area,
+    get_all_json_review_areas,
+    get_unmapped_areas
+)
 
 from app.exceptions import ValidationError
 from app.utils.logging import get_logger
@@ -44,32 +54,12 @@ class DataTransformer:
 
     SCHEMA_VERSION = "1.0"
 
-    # 23 required CORTAP review areas (for validation)
-    REQUIRED_REVIEW_AREAS = [
-        "Legal",
-        "Financial Management and Capacity",
-        "Technical Capacity - Award Management",
-        "Technical Capacity - Program Management and Subrecipient Oversight",
-        "Technical Capacity - Project Management",
-        "Transit Asset Management",
-        "Satisfactory Continuing Control",
-        "Maintenance",
-        "Americans with Disabilities Act (ADA)",
-        "Drug and Alcohol",
-        "Buy America",
-        "Disadvantaged Business Enterprise (DBE)",
-        "Procurement",
-        "Public Transportation Agency Safety Plan (PTASP)",
-        "Equal Employment Opportunity (EEO)",
-        "Public Participation",
-        "Charter Service",
-        "School Bus",
-        "Labor",
-        "Demand Responsive Services",
-        "Planning/Service Standards",
-        "Security and Emergency Preparedness",
-        "Half-Fare"
-    ]
+    # FY26 CORTAP review areas (21 total - DBE and EEO removed from FY26)
+    # Dynamically loaded from mapping module
+    @property
+    def REQUIRED_REVIEW_AREAS(self):
+        """Get FY26 review areas from mapping module (21 areas)."""
+        return get_all_json_review_areas()
 
     def __init__(self):
         """Initialize DataTransformer."""
@@ -78,22 +68,23 @@ class DataTransformer:
     def transform(
         self,
         project_id: int,
-        riskuity_assessments: List[Dict],
+        riskuity_project_controls: List[Dict],
         project_metadata: Optional[Dict] = None,
         correlation_id: Optional[str] = None
     ) -> Dict:
         """
-        Transform Riskuity assessments (up to 644) to canonical JSON schema with 23 review areas.
+        Transform Riskuity project controls (up to 708) to canonical JSON schema with 21 review areas (FY26).
 
         This method:
-        1. Extracts project metadata from assessments
-        2. Groups 644 control assessments by control_family into 23 CORTAP review areas
+        1. Extracts project metadata from project controls
+        2. Groups 494-708 control assessments by control name prefix into 21 CORTAP review areas
         3. Consolidates findings (D/ND/NA) per review area
         4. Calculates derived metadata
 
         Args:
             project_id: Riskuity project identifier (integer)
-            riskuity_assessments: List of 644 assessment objects from Riskuity API
+            riskuity_project_controls: List of project_control objects from Riskuity API
+                                        (from GET /projects/project_controls/{project_id})
             project_metadata: Optional dict with project-level overrides
             correlation_id: Optional correlation ID for request tracing
 
@@ -107,16 +98,16 @@ class DataTransformer:
             f"Starting data transformation for project {project_id}",
             extra={
                 "project_id": project_id,
-                "assessment_count": len(riskuity_assessments),
+                "project_controls_count": len(riskuity_project_controls),
                 "correlation_id": correlation_id
             }
         )
 
         try:
-            # Extract project metadata from first assessment (all have same project info)
-            if riskuity_assessments and not project_metadata:
+            # Extract project metadata from first project_control (all have same project info)
+            if riskuity_project_controls and not project_metadata:
                 project_metadata = self._extract_project_metadata(
-                    riskuity_assessments[0],
+                    riskuity_project_controls[0],
                     correlation_id
                 )
 
@@ -129,7 +120,7 @@ class DataTransformer:
                 "contractor": self._transform_contractor(project_metadata or {}, correlation_id),
                 "fta_program_manager": self._transform_fta_pm(project_metadata or {}, correlation_id),
                 "assessments": self._consolidate_assessments_by_review_area(
-                    riskuity_assessments,
+                    riskuity_project_controls,
                     correlation_id
                 ),
                 "erf_items": [],  # Will be populated from deficient assessments
@@ -147,7 +138,7 @@ class DataTransformer:
                 f"Data transformation completed for project {project_id}",
                 extra={
                     "project_id": project_id,
-                    "input_assessments": len(riskuity_assessments),
+                    "input_project_controls": len(riskuity_project_controls),
                     "output_review_areas": len(canonical["assessments"]),
                     "has_deficiencies": canonical["metadata"]["has_deficiencies"],
                     "deficiency_count": canonical["metadata"]["deficiency_count"],
@@ -173,25 +164,24 @@ class DataTransformer:
                 details={"project_id": project_id, "error": str(e)}
             ) from e
 
-    def _extract_project_metadata(self, assessment: Dict, correlation_id: Optional[str]) -> Dict:
+    def _extract_project_metadata(self, project_control: Dict, correlation_id: Optional[str]) -> Dict:
         """
-        Extract project-level metadata from a Riskuity assessment object.
+        Extract project-level metadata from a Riskuity project_control object.
 
-        Since all assessments belong to the same project, we extract common
-        project info from any assessment (typically the first one).
+        Since all project_controls belong to the same project, we extract common
+        project info from any project_control (typically the first one).
 
         Args:
-            assessment: Single Riskuity assessment object
+            project_control: Single Riskuity project_control object
             correlation_id: Optional correlation ID
 
         Returns:
             dict: Extracted project metadata
         """
         try:
-            project_control = assessment.get("project_control", {})
             project_info = project_control.get("project", {})
 
-            # Extract what we can from the assessment structure
+            # Extract what we can from the project_control structure
             # Note: Many fields will need to come from external source or be configurable
             metadata = {
                 "project_id": project_info.get("id", ""),
@@ -206,7 +196,7 @@ class DataTransformer:
             }
 
             logger.debug(
-                "Extracted project metadata from assessment",
+                "Extracted project metadata from project_control",
                 extra={"metadata": metadata, "correlation_id": correlation_id}
             )
 
@@ -221,56 +211,80 @@ class DataTransformer:
 
     def _consolidate_assessments_by_review_area(
         self,
-        riskuity_assessments: List[Dict],
+        riskuity_project_controls: List[Dict],
         correlation_id: Optional[str]
     ) -> List[Dict]:
         """
-        Consolidate 644 Riskuity control assessments into 23 CORTAP review areas.
+        Consolidate 494-708 Riskuity project_control assessments into 21 FY26 CORTAP review areas.
 
         Logic:
-        1. Group assessments by control_family.name (maps to CORTAP review area)
-        2. For each review area, determine overall finding:
-           - If ANY control is Deficient (D) → review area is D
-           - If ALL controls are Non-Deficient (ND) → review area is ND
-           - If ALL controls are Not Applicable (NA) → review area is NA
-        3. Aggregate deficiency details from all deficient controls in that area
+        1. Extract control name from each project_control
+        2. Map control name prefix to JSON review area using riskuity_control_mapping module
+        3. For each review area, determine overall finding:
+           - If ANY control has a deficiency → review area is D
+           - If ALL controls are compliant → review area is ND
+           - If ALL controls are Not Applicable → review area is NA
+        4. Aggregate deficiency details from all deficient controls in that area
 
         Args:
-            riskuity_assessments: List of Riskuity assessment objects
+            riskuity_project_controls: List of Riskuity project_control objects
             correlation_id: Optional correlation ID
 
         Returns:
-            list: Consolidated assessments (23 review areas in CORTAP format)
+            list: Consolidated assessments (21 FY26 review areas in CORTAP format)
         """
         from collections import defaultdict
 
-        # Group assessments by control family (review area)
+        # Group project_controls by review area (using control name mapping)
         review_areas = defaultdict(list)
+        unmapped_controls = []
 
-        for assessment in riskuity_assessments:
+        for project_control in riskuity_project_controls:
             try:
-                project_control = assessment.get("project_control", {})
-                control_family = project_control.get("control_family", {})
-                family_name = control_family.get("name", "Unknown")
+                # Get control name and embedded assessment
+                control = project_control.get("control", {})
+                control_name = control.get("name", "")
+                assessment = project_control.get("assessment", {})
+
+                # Map control name to JSON review area
+                json_review_area = map_to_json_review_area(control_name)
+
+                if not json_review_area:
+                    unmapped_controls.append(control_name)
+                    logger.warning(
+                        f"Could not map control to review area: {control_name}",
+                        extra={"control_name": control_name, "project_control_id": project_control.get("id"), "correlation_id": correlation_id}
+                    )
+                    continue
 
                 # Get assessment status/finding
-                # Map Riskuity status to CORTAP finding codes
                 status = assessment.get("status", "Not Started")
                 review_status = self._map_status_to_finding(status, assessment)
 
-                review_areas[family_name].append({
+                review_areas[json_review_area].append({
                     "assessment": assessment,
                     "finding": review_status,
-                    "control_name": project_control.get("control", {}).get("name", ""),
-                    "control_id": project_control.get("control", {}).get("id", "")
+                    "control_name": control_name,
+                    "control_id": control.get("id", ""),
+                    "project_control_id": project_control.get("id", "")
                 })
 
             except Exception as e:
                 logger.warning(
-                    f"Failed to process assessment: {str(e)}",
-                    extra={"assessment_id": assessment.get("id"), "error": str(e), "correlation_id": correlation_id}
+                    f"Failed to process project_control: {str(e)}",
+                    extra={"project_control_id": project_control.get("id"), "error": str(e), "correlation_id": correlation_id}
                 )
                 continue
+
+        if unmapped_controls:
+            logger.warning(
+                f"Found {len(unmapped_controls)} unmapped controls",
+                extra={
+                    "unmapped_count": len(unmapped_controls),
+                    "sample_controls": unmapped_controls[:10],
+                    "correlation_id": correlation_id
+                }
+            )
 
         # Consolidate each review area
         consolidated = []
@@ -283,13 +297,35 @@ class DataTransformer:
             consolidated.append(consolidated_assessment)
 
         logger.info(
-            f"Consolidated {len(riskuity_assessments)} assessments into {len(consolidated)} review areas",
+            f"Consolidated {len(riskuity_project_controls)} project controls into {len(consolidated)} review areas",
             extra={
-                "input_count": len(riskuity_assessments),
+                "input_count": len(riskuity_project_controls),
                 "output_count": len(consolidated),
+                "unmapped_count": len(unmapped_controls),
                 "correlation_id": correlation_id
             }
         )
+
+        # Add missing review areas with "NA" finding
+        # This handles review areas like Title VI that may not have controls in all projects
+        existing_areas = set(review_areas.keys())
+        all_fy26_areas = set(get_all_json_review_areas())
+        missing_areas = all_fy26_areas - existing_areas
+
+        for missing_area in missing_areas:
+            logger.info(
+                f"Adding missing review area with NA finding: {missing_area}",
+                extra={"review_area": missing_area, "correlation_id": correlation_id}
+            )
+            consolidated.append({
+                "review_area": missing_area,
+                "finding": "NA",
+                "deficiency_code": None,
+                "description": None,
+                "corrective_action": None,
+                "due_date": None,
+                "date_closed": None
+            })
 
         return consolidated
 
@@ -301,9 +337,10 @@ class DataTransformer:
         CORTAP findings: "D" (Deficient), "ND" (Non-Deficient), "NA" (Not Applicable)
 
         Logic:
-        - Check instances[].review_status for actual finding
-        - Map status to finding code
-        - Default to "ND" if unclear
+        1. Check comments field for deficiency indicators (fail, deficient, etc.)
+        2. Check instances[].review_status for actual finding
+        3. Map status to finding code
+        4. Default to "ND" if unclear
 
         Args:
             status: Riskuity assessment status
@@ -312,22 +349,32 @@ class DataTransformer:
         Returns:
             str: "D", "ND", or "NA"
         """
+        # Check comments for deficiency indicators
+        comments = assessment.get("comments", "").lower()
+        if comments:
+            if any(word in comments for word in ["fail", "deficien", "non-complian", "violation"]):
+                return "D"
+            elif "not applicable" in comments or "n/a" in comments:
+                return "NA"
+
         # Check instances for review status
         instances = assessment.get("instances", [])
         if instances:
-            review_status = instances[0].get("review_status", "")
-            # TODO: Map Riskuity review_status values to D/ND/NA
-            # This mapping depends on your Riskuity configuration
-            if "deficien" in review_status.lower() or "fail" in review_status.lower():
-                return "D"
-            elif "not applicable" in review_status.lower() or "n/a" in review_status.lower():
-                return "NA"
+            review_status = instances[0].get("review_status", "").lower()
+            if review_status:
+                if any(word in review_status for word in ["deficien", "fail", "non-complian"]):
+                    return "D"
+                elif "not applicable" in review_status or "n/a" in review_status:
+                    return "NA"
 
         # Fallback: map overall status
         if status in ["Complete", "Completed"]:
-            return "ND"  # Assume complete = non-deficient unless instance says otherwise
+            # If complete but no deficiency indicators, assume compliant
+            return "ND"
         elif status == "Not Started":
-            return "NA"  # Not yet assessed
+            # Not yet assessed - treat as non-deficient for now
+            # (In production, you might want different logic here)
+            return "ND"
 
         return "ND"  # Default to non-deficient
 
@@ -360,12 +407,14 @@ class DataTransformer:
             for dc in deficient_controls:
                 control_name = dc["control_name"]
                 assessment_obj = dc["assessment"]
-                desc = assessment_obj.get("description", "")
                 comments = assessment_obj.get("comments", "")
-                if desc:
-                    deficiency_descriptions.append(f"{control_name}: {desc}")
-                elif comments:
+                desc = assessment_obj.get("description", "")
+
+                # Prefer comments over description (comments are more specific)
+                if comments:
                     deficiency_descriptions.append(f"{control_name}: {comments}")
+                elif desc:
+                    deficiency_descriptions.append(f"{control_name}: {desc}")
 
             description = "\n".join(deficiency_descriptions) if deficiency_descriptions else "Deficiency found in one or more controls"
         elif all(f == "NA" for f in findings):

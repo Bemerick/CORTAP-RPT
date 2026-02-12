@@ -70,3 +70,6 @@ celerybeat.pid
 #env variables
 .env.prod
 .env.dev
+
+# Riskuity token cache (contains sensitive authentication tokens)
+.riskuity_token_cache.json
