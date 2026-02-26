@@ -11,19 +11,13 @@ __pycache__/
 .coverage
 *.log
 
-# Documentation (too large for Lambda)
-docs/archive/
-docs/completed_reviews/
-docs/poc-data-sources/
-docs/RIR 2026/
-docs/Working Final Report/
-docs/*.xlsx
-docs/*.docx
-docs/*.pdf
-docs/*.html
-docs/requirements/*.pdf
-docs/requirements/*.html
-docs/requirements/*.fld/
+# Documentation (not needed for Lambda - 8.3MB)
+# All runtime assets have been migrated:
+#   - Schema: docs/schemas/ → app/schemas/
+#   - Templates: already in app/templates/
+#   - Config: already in config/
+docs/**
+docs/
 
 # Test files
 tests/
