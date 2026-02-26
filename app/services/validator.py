@@ -88,9 +88,9 @@ class JsonValidator:
             schema_path: Path to JSON schema file (defaults to canonical schema)
         """
         if schema_path is None:
-            # Default to canonical schema
+            # Default to canonical schema (app/schemas for Lambda compatibility)
             schema_path = str(
-                Path(__file__).parent.parent.parent / "docs" / "schemas" / "project-data-schema-v1.0.json"
+                Path(__file__).parent.parent / "schemas" / "project-data-schema-v1.0.json"
             )
 
         self.schema_path = schema_path

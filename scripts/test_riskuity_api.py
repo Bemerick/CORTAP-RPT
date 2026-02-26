@@ -115,6 +115,7 @@ class RiskuityAuth:
             try:
                 # Step 1: Get initial response (may require OTP)
                 print(f"   Step 1: Sending credentials...")
+                print(f"   DEBUG: Auth URL: {url}")
                 response = await client.post(
                     url,
                     json=payload,

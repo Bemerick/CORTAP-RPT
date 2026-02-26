@@ -271,13 +271,13 @@ async def main():
     args = parser.parse_args()
 
     # Check environment
-    riskuity_email = os.getenv("RISKUITY_EMAIL")
+    riskuity_email = os.getenv("RISKUITY_USERNAME") or os.getenv("RISKUITY_EMAIL")
     riskuity_password = os.getenv("RISKUITY_PASSWORD")
 
     if not riskuity_email or not riskuity_password:
-        print("❌ Error: RISKUITY_EMAIL and RISKUITY_PASSWORD must be set in .env")
+        print("❌ Error: RISKUITY_USERNAME (or RISKUITY_EMAIL) and RISKUITY_PASSWORD must be set in .env")
         print("\nPlease add to your .env file:")
-        print("  RISKUITY_EMAIL=your.email@example.com")
+        print("  RISKUITY_USERNAME=your.email@example.com")
         print("  RISKUITY_PASSWORD=your_password")
         sys.exit(1)
 
@@ -287,7 +287,7 @@ async def main():
         print(f"Step 1: Authenticate with Riskuity")
         print(f"{'='*80}\n")
 
-        auth = RiskuityAuth(base_url="https://app.riskuity.com")
+        auth = RiskuityAuth(base_url="https://api.riskuity.com")
         token = await auth.get_token(
             username=riskuity_email,
             password=riskuity_password

@@ -33,8 +33,8 @@ source scripts/aws-mfa-login.sh
 ## Deploy (2 Commands)
 
 ```bash
-# 1. Build
-sam build
+# 1. Build (excludes large docs/output directories)
+./build-lambda.sh
 
 # 2. Deploy to dev
 sam deploy --config-env dev
@@ -67,7 +67,7 @@ aws cloudformation describe-stacks \
 ## Test
 
 ```bash
-export API_URL="https://[your-id].execute-api.us-gov-west-1.amazonaws.com/dev/api/v1/generate-report-sync"
+export API_URL="https://qs5wkdxe8l.execute-api.us-gov-west-1.amazonaws.com/dev/api/v1/generate-report-sync"
 export RISKUITY_TOKEN="Bearer [your-token]"
 
 curl -X POST "$API_URL" \
@@ -87,7 +87,7 @@ curl -X POST "$API_URL" \
 vi config/project-setup.json
 
 # 2. Rebuild & redeploy
-sam build --use-container && sam deploy --profile govcloud
+./build-lambda.sh && sam deploy --config-env dev
 ```
 
 ---
@@ -129,6 +129,7 @@ sam delete --stack-name cortap-rpt-dev
 
 ---
 
-**Status:** ✅ Ready to deploy
+**Status:** ✅ Deployed to AWS GovCloud
+**API Endpoint:** https://qs5wkdxe8l.execute-api.us-gov-west-1.amazonaws.com/dev/api/v1/generate-report-sync
 **Est. Cost:** ~$1-10/month
-**Est. Time:** 5-10 minutes
+**Package Size:** 33MB (78MB unzipped)

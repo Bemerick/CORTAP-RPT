@@ -18,7 +18,6 @@ Globals:
         LOG_LEVEL: !Ref LogLevel
         ENVIRONMENT: !Ref Environment
         S3_BUCKET_NAME: !Ref DocumentsBucket
-        AWS_REGION: !Ref AWS::Region
 
 # Parameters for configurable values
 Parameters:
@@ -43,7 +42,7 @@ Parameters:
 
   RiskuityApiUrl:
     Type: String
-    Default: https://app.riskuity.com/v1
+    Default: https://api.riskuity.com
     Description: Riskuity API base URL
 
   AllowedOrigins:
@@ -132,10 +131,13 @@ Resources:
   # Lambda Function for Synchronous Generation
   GenerateReportSyncFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: python3.11
     Properties:
       FunctionName: !Sub cortap-generate-report-sync-${Environment}
       Description: Synchronous report generation from Riskuity data
       CodeUri: .
+      PackageType: Zip
       Handler: app.handlers.generate_sync_handler.lambda_handler
       Role: !GetAtt GenerateReportFunctionRole.Arn
       Timeout: 120  # 2 minutes
@@ -172,23 +174,6 @@ Resources:
         Type: REGIONAL
       Auth:
         DefaultAuthorizer: NONE
-      DefinitionBody:
-        openapi: 3.0.0
-        info:
-          title: CORTAP Report Generation API
-          version: 1.0.0
-        paths:
-          /api/v1/generate-report-sync:
-            post:
-              summary: Generate report synchronously
-              responses:
-                '200':
-                  description: Success
-              x-amazon-apigateway-integration:
-                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GenerateReportSyncFunction.Arn}/invocations
-                httpMethod: POST
-                type: aws_proxy
-                timeoutInMillis: 29000
 
   # CloudWatch Log Group
   GenerateReportLogGroup:

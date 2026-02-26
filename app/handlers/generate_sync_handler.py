@@ -46,9 +46,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             "token": "Bearer ..."
         }
     """
-    # Check if this is an HTTP request (Function URL)
-    if "requestContext" in event and "http" in event.get("requestContext", {}):
-        # HTTP request via Function URL - use Mangum adapter
+    # Check if this is an HTTP request (API Gateway REST API, HTTP API, or Function URL)
+    # REST API: has "httpMethod" key
+    # HTTP API v2 / Function URL: has "requestContext.http"
+    if "httpMethod" in event or ("requestContext" in event and "http" in event.get("requestContext", {})):
+        # HTTP request via API Gateway or Function URL - use Mangum adapter
         return handler(event, context)
 
     # Direct Lambda invocation - convert to HTTP format

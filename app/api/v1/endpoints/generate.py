@@ -467,9 +467,9 @@ async def generate_report_sync(
         )
 
         try:
-            download_url = await s3_storage.generate_presigned_url(
+            download_url = s3_storage.generate_presigned_url(
                 s3_key=s3_key,
-                expiration=86400  # 24 hours
+                expires_in=86400  # 24 hours
             )
         except S3StorageError as e:
             logger.error(

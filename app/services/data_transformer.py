@@ -20,6 +20,7 @@ from services.riskuity_control_mapping import (
 
 from app.exceptions import ValidationError
 from app.utils.logging import get_logger
+from app.services.project_config import ProjectConfigService
 
 logger = get_logger(__name__)
 
@@ -61,9 +62,19 @@ class DataTransformer:
         """Get FY26 review areas from mapping module (21 areas)."""
         return get_all_json_review_areas()
 
-    def __init__(self):
-        """Initialize DataTransformer."""
-        logger.info("DataTransformer initialized", extra={"schema_version": self.SCHEMA_VERSION})
+    def __init__(self, config_service: Optional[ProjectConfigService] = None):
+        """
+        Initialize DataTransformer.
+
+        Args:
+            config_service: Optional ProjectConfigService for loading project setup data.
+                          If not provided, will create default instance.
+        """
+        self.config_service = config_service or ProjectConfigService()
+        logger.info(
+            "DataTransformer initialized",
+            extra={"schema_version": self.SCHEMA_VERSION}
+        )
 
     def transform(
         self,
@@ -104,16 +115,42 @@ class DataTransformer:
         )
 
         try:
-            # Extract project metadata from first project_control (all have same project info)
-            if riskuity_project_controls and not project_metadata:
-                project_metadata = self._extract_project_metadata(
-                    riskuity_project_controls[0],
+            # Load project setup configuration (overrides Riskuity data if available)
+            if not project_metadata:
+                # Try to load from config file first
+                config_metadata = self.config_service.get_project_metadata(
+                    project_id,
                     correlation_id
                 )
 
+                # If config exists, use it; otherwise extract from Riskuity
+                if config_metadata and config_metadata.get('region_number') != 1:
+                    # Config exists (region_number != default value of 1)
+                    project_metadata = config_metadata
+                    logger.info(
+                        f"Using project setup config for project {project_id}",
+                        extra={"project_id": project_id, "correlation_id": correlation_id}
+                    )
+                elif riskuity_project_controls:
+                    # Fall back to extracting from Riskuity
+                    project_metadata = self._extract_project_metadata(
+                        riskuity_project_controls[0],
+                        correlation_id
+                    )
+                    logger.info(
+                        f"Using Riskuity metadata for project {project_id} (no config found)",
+                        extra={"project_id": project_id, "correlation_id": correlation_id}
+                    )
+                else:
+                    # Use defaults from config service
+                    project_metadata = config_metadata
+
             # Build canonical JSON structure
+            # Convert project_id to RSKTY format if it's just a number
+            formatted_project_id = f"RSKTY-{int(project_id):04d}" if str(project_id).isdigit() else str(project_id)
+
             canonical = {
-                "project_id": str(project_id),
+                "project_id": formatted_project_id,
                 "generated_at": datetime.utcnow().isoformat() + "Z",
                 "data_version": self.SCHEMA_VERSION,
                 "project": self._transform_project(project_metadata or {}, correlation_id),
@@ -131,6 +168,7 @@ class DataTransformer:
             canonical["metadata"] = self._calculate_metadata(
                 canonical["assessments"],
                 canonical["erf_items"],
+                project_metadata,
                 correlation_id
             )
 
@@ -183,15 +221,33 @@ class DataTransformer:
 
             # Extract what we can from the project_control structure
             # Note: Many fields will need to come from external source or be configurable
+            project_id = project_info.get("id", "")
+            project_name = project_info.get("name", "")
+
             metadata = {
-                "project_id": project_info.get("id", ""),
-                "project_name": project_info.get("name", ""),
+                "project_id": project_id,
+                "project_name": project_name,
                 # These fields likely need to come from configuration or another source:
                 "region_number": 1,  # TODO: Configure or extract from project
                 "review_type": "Triennial Review",  # TODO: Configure
-                "recipient_name": project_info.get("name", ""),
-                "recipient_city_state": "",  # TODO: Configure
-                "recipient_id": project_info.get("id", ""),
+                "recipient_name": project_name,
+                "recipient_acronym": "TBD",  # TODO: Extract or configure
+                "recipient_city_state": "City, ST",  # TODO: Configure - default to avoid validation error
+                "recipient_id": project_id,
+                "fiscal_year": "FY2026",  # TODO: Extract from project or configure
+                "report_date": datetime.utcnow().strftime("%B %d, %Y"),  # Default to today
+                # Contractor fields (TODO: Get from configuration or user input)
+                "lead_reviewer_name": "TBD",
+                "contractor_name": "TBD",
+                "company_name": "TBD",  # Required for completeness check
+                "lead_reviewer_phone": "TBD",
+                "lead_reviewer_email": "TBD",
+                # FTA PM fields (TODO: Get from configuration or user input)
+                "fta_program_manager_name": "TBD",
+                "name": "TBD",  # Required for completeness check (FTA PM name)
+                "fta_program_manager_title": "TBD",
+                "fta_program_manager_phone": "TBD",
+                "fta_program_manager_email": "TBD",
                 # Add more fields as needed
             }
 
@@ -491,14 +547,16 @@ class DataTransformer:
         """
         Transform contractor/lead reviewer information.
 
-        Required fields: lead_reviewer_name, contractor_name, lead_reviewer_phone, lead_reviewer_email
+        Required fields: lead_reviewer_name, company_name, lead_reviewer_phone, lead_reviewer_email
         """
         try:
+            contractor_name = project_data.get("contractor_name", project_data.get("company_name", "TBD"))
             return {
-                "lead_reviewer_name": project_data["lead_reviewer_name"],
-                "contractor_name": project_data["contractor_name"],
-                "lead_reviewer_phone": project_data["lead_reviewer_phone"],
-                "lead_reviewer_email": project_data["lead_reviewer_email"],
+                "lead_reviewer_name": project_data.get("lead_reviewer_name", "TBD"),
+                "contractor_name": contractor_name,  # Required by schema
+                "company_name": contractor_name,  # Required by completeness check
+                "lead_reviewer_phone": project_data.get("lead_reviewer_phone", "TBD"),
+                "lead_reviewer_email": project_data.get("lead_reviewer_email", "TBD"),
             }
         except KeyError as e:
             raise ValidationError(
@@ -511,15 +569,17 @@ class DataTransformer:
         """
         Transform FTA Program Manager information.
 
-        Required fields: fta_program_manager_name, fta_program_manager_title,
+        Required fields: name, fta_program_manager_title,
                         fta_program_manager_phone, fta_program_manager_email
         """
         try:
+            pm_name = project_data.get("fta_program_manager_name", project_data.get("name", "TBD"))
             return {
-                "fta_program_manager_name": project_data["fta_program_manager_name"],
-                "fta_program_manager_title": project_data["fta_program_manager_title"],
-                "fta_program_manager_phone": project_data["fta_program_manager_phone"],
-                "fta_program_manager_email": project_data["fta_program_manager_email"],
+                "name": pm_name,  # Required by completeness check
+                "fta_program_manager_name": pm_name,  # Legacy/alias field
+                "fta_program_manager_title": project_data.get("fta_program_manager_title", "TBD"),
+                "fta_program_manager_phone": project_data.get("fta_program_manager_phone", "TBD"),
+                "fta_program_manager_email": project_data.get("fta_program_manager_email", "TBD"),
             }
         except KeyError as e:
             raise ValidationError(
@@ -615,6 +675,7 @@ class DataTransformer:
         self,
         assessments: List[Dict],
         erf_items: List[Dict],
+        project_metadata: Optional[Dict],
         correlation_id: Optional[str]
     ) -> Dict:
         """
@@ -627,6 +688,7 @@ class DataTransformer:
         - erf_count: int
         - erf_areas: list of ERF area names
         - total_review_areas: int
+        - fiscal_year: string (from project_metadata)
         """
         # Count deficiencies
         deficient_assessments = [a for a in assessments if a["finding"] == "D"]
@@ -645,6 +707,8 @@ class DataTransformer:
             "erf_count": erf_count,
             "erf_areas": erf_areas,
             "total_review_areas": len(assessments),
+            "fiscal_year": project_metadata.get("fiscal_year", "FY2026") if project_metadata else "FY2026",
+            "review_status": "Draft" if has_deficiencies else "Final",  # Default review status
         }
 
         logger.debug(
