@@ -708,7 +708,7 @@ class DataTransformer:
             "erf_areas": erf_areas,
             "total_review_areas": len(assessments),
             "fiscal_year": project_metadata.get("fiscal_year", "FY2026") if project_metadata else "FY2026",
-            "review_status": "Draft" if has_deficiencies else "Final",  # Default review status
+            "review_status": "Draft" if has_deficiencies else "Completed",  # Default review status
         }
 
         logger.debug(
